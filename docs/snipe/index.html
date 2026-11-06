@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge Hammer · Snipe Box</title>
+<meta name="description" content="A modified Forge Hammer extension for Forge of Empires that shows the most profitable Great Building spot to snipe.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
+<style>
+    :root {
+    --bg: #f2f4f7;
+    --panel: #ffffff;
+    --ink: #1b2433;
+    --muted: #5b6678;
+    --line: #d8dde6;
+    --accent: #d4a72c;
+    --accent-ink: #14203a;
+    --good: #2f7d32;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1729;
+      --panel: #16213a;
+      --ink: #e7ebf2;
+      --muted: #a3adbf;
+      --line: #27365a;
+      --accent: #d4a72c;
+      --accent-ink: #14203a;
+      --good: #7cc47f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 17px/1.6 "Barlow", system-ui, sans-serif;
+  }
+  main { max-width: 680px; margin: 0 auto; padding: 48px 20px 64px; }
+  h1, h2 { font-family: "Barlow Condensed", "Arial Narrow", sans-serif; }
+  h1 { font-size: 2.6rem; line-height: 1.15; margin: 0 0 8px; }
+  h2 { font-size: 1.25rem; margin: 40px 0 12px; }
+  p.lead { color: var(--muted); font-size: 1.1rem; margin: 0 0 28px; }
+  .download {
+    display: inline-block;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font: 600 1rem/1 system-ui, sans-serif;
+    padding: 14px 22px;
+    border-radius: 8px;
+    text-decoration: none;
+  }
+  .download:hover { filter: brightness(1.08); }
+  .small { color: var(--muted); font-size: 0.9rem; margin-top: 10px; }
+
+  .demo {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    margin: 32px 0 0;
+    font-family: system-ui, sans-serif;
+  }
+  .demo .label { font-size: 0.75rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: center; }
+  .demo .row { display: flex; justify-content: center; align-items: baseline; gap: 14px; font-size: 1.3rem; margin-top: 4px; }
+  .demo .fp { font-weight: 700; }
+  .demo .profit { color: var(--good); font-weight: 700; }
+  .demo .note { text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 6px; }
+
+  ol { padding-left: 1.3em; }
+  ol li { margin-bottom: 10px; }
+  code {
+    font: 0.9em ui-monospace, Consolas, monospace;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  footer { border-top: 1px solid var(--line); margin-top: 48px; padding-top: 16px; color: var(--muted); font-size: 0.9rem; }
+  a { color: inherit; }
+  .back { display: inline-block; margin-bottom: 24px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="../">Redemption guild home</a>
+  <h1>Forge Hammer, with a snipe box</h1>
+  <p class="lead">A modified version of the Forge Hammer browser extension for Forge of Empires. When you open another player's Great Building, it tells you which spot to take for the most Forge Point profit, and exactly how many FP to put in.</p>
+
+  <a class="download" href="https://github.com/jchuanico/foe/archive/refs/heads/main.zip">Download for Chrome / Edge</a>
+  <p class="small">A .zip file. No GitHub account needed.</p>
+
+  <div class="demo" aria-label="Example of the snipe box">
+    <div class="label">Best snipe</div>
+    <div class="row"><span class="fp">#1</span><span class="fp">425 FP</span><span class="profit">+145 FP</span></div>
+    <div class="note">Example: click the FP amount to paste it into the game</div>
+  </div>
+
+  <h2>What the box shows</h2>
+  <p>The place you can lock so nobody below can overtake you, the FP that takes, and your profit after your own Arc bonus. If you can't afford the best spot, it shows the best one you can afford. It also warns you when taking the spot would level the building.</p>
+
+  <h2>How to install</h2>
+  <ol>
+    <li>If you already have Forge Hammer installed, remove it first so the two don't both run.</li>
+    <li>Download the zip above and extract it somewhere it can stay, like your Documents folder. Chrome loads it from there every time, so don't delete or move it later.</li>
+    <li>In Chrome, go to <code>chrome://extensions</code> (in Edge, <code>edge://extensions</code>).</li>
+    <li>Turn on <strong>Developer mode</strong>.</li>
+    <li>Click <strong>Load unpacked</strong> and choose the <code>foe-main</code> folder you extracted. It's the one with <code>manifest.json</code> directly inside it, not a folder within it.</li>
+    <li>Reload your Forge of Empires tab, then open someone's Great Building.</li>
+  </ol>
+  <p class="small">Chrome may show a notice about developer-mode extensions when it starts. That's normal for extensions installed this way.</p>
+
+  <h2>Updating</h2>
+  <p>This version doesn't update itself. To get a newer one, download the zip again, replace the old folder with the new one, and click the reload arrow on the extension in <code>chrome://extensions</code>.</p>
+
+  <footer>
+    Unofficial. Based on <a href="https://github.com/outoftheline/forge-hammer">Forge Hammer</a> by its original authors, used under the GNU AGPL v3. Source for this version: <a href="https://github.com/jchuanico/foe">github.com/jchuanico/foe</a>. Not affiliated with InnoGames.
+  </footer>
+</main>
+</body>
+</html>
