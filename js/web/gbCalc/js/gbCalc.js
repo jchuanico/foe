@@ -51,12 +51,19 @@
         GBList[x.player_id+ '_' + x.id] = x;
 	});
 
+    /**
+     * Golden tier: listed GB above level 101.
+     * hasBonuses is only checked when known (full city entity); contribution rows don't carry it.
+     */
+    function isGolden(cityentity_id, level, hasBonuses = true) {
+        return goldenGBs.indexOf(cityentity_id) >= 0 && level > 101 && hasBonuses;
+    };
+
     function setGBtier(gb) {
-        let isGolden = goldenGBs.indexOf(gb.cityentity_id) >= 0 && gb.level > 101 && gb.bonuses.length > 0;
-        gb.tier = isGolden ? 'gold' : 'copper';
-        FH.Main.ArkBonus = Boosts.Sums.contribution_boost;
-        if (isGolden)
-            FH.Main.ArkBonus = Boosts.Sums.contribution_boost_gold;
+        if (!gb) return;
+        gb.tier = isGolden(gb.cityentity_id, gb.level, (gb.bonuses?.length || 0) > 0) ? 'gold' : 'copper';
+        // FH.Main.ArkBonus stays the copper (normal) bonus for all other modules.
+        // Tier-aware code uses getArcBoost() instead of switching the global.
     };
 
     function getGB(player_id, entity_id) {
@@ -65,6 +72,13 @@
         return GBList[id];
     };
 
-    FH.GBCalc = {getGB: getGB};
+    /**
+     * The player's own contribution bonus that applies to rewards from a GB of this tier
+     */
+    function getArcBoost(tier) {
+        return tier === 'gold' ? (Boosts.Sums.contribution_boost_gold || 0) : (Boosts.Sums.contribution_boost || 0);
+    };
+
+    FH.GBCalc = {getGB: getGB, isGolden: isGolden, getArcBoost: getArcBoost};
 
 }

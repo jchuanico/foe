@@ -555,14 +555,53 @@ let Investment = {
 	},
 
 
+	/**
+	 * Key for the bonuses the stored investment values were calculated with
+	 *
+	 * @returns {string}
+	 */
+	ArcBonusKey: () => {
+		return 'v2|' + (Boosts.Sums.contribution_boost || 0) + '|' + (Boosts.Sums.contribution_boost_gold || 0);
+	},
+
+
+	/**
+	 * Your contribution bonus for the GB in this contribution row:
+	 * the gold-tier bonus for golden GBs, the normal Arc bonus otherwise
+	 *
+	 * @param row Contribution / GB overview entry
+	 * @returns {number}
+	 */
+	GetArcBoost: (row) => {
+		const hasGoldReward = (row?.reward?.blueprintRewards || []).some(b => b?.tier?.value === 'gold');
+
+		let ceId = row?.city_entity_id || row?.cityentity_id;
+		if (!ceId && row?.name && FH.Main.CityEntities) {
+			if (!Investment._ceIdByName) {
+				Investment._ceIdByName = {};
+				for (const [id, e] of Object.entries(FH.Main.CityEntities)) {
+					if (e?.type === 'greatbuilding' || String(id).includes('Landmark') || String(id).startsWith('X_')) Investment._ceIdByName[e?.name] = id;
+				}
+			}
+			ceId = Investment._ceIdByName[row.name];
+		}
+
+		const golden = hasGoldReward || (ceId && FH.GBCalc?.isGolden ? FH.GBCalc.isGolden(ceId, row?.level || 0) : false);
+
+		return FH.GBCalc?.getArcBoost
+			? FH.GBCalc.getArcBoost(golden ? 'gold' : 'copper')
+			: (golden ? Boosts.Sums.contribution_boost_gold : Boosts.Sums.contribution_boost);
+	},
+
+
 	UpdateData: async (LGData, FullSync) => {
 
-		let arc = 1 + (FH.Main.ArkBonus / 100);
 		let allGB = await IndexDB.db.investhistory.where('id').above(0).keys();
 		let UpdatedList = false;
 		let playerSyncGbKeys = null;
-		let arcLevelCheck = JSON.parse(FH.Storage.getItem('InvestmentArcBonus'));
-		let forceFullUpdate = !arcLevelCheck || arcLevelCheck != FH.Main.ArkBonus ? true : false;
+		// Recalculate everything when either bonus changed (or values were stored by the old single-bonus logic)
+		let arcLevelCheck = FH.Storage.getItem('InvestmentArcBonus');
+		let forceFullUpdate = arcLevelCheck !== Investment.ArcBonusKey();
 
 		for (let i in LGData)
 		{
@@ -594,6 +633,7 @@ let Investment = {
 					MaxProgress = LGData[i]['max_progress'],
 					Rank = LGData[i]['rank'],
 					increase = 0;
+				let arc = 1 + (Investment.GetArcBoost(LGData[i]) / 100);
 				let CurrentErtrag = 0.0;
 				let Medals = 0;
 				let Blueprints = 0;
@@ -721,7 +761,7 @@ let Investment = {
 			let InvestmentSettings = JSON.parse(FH.Storage.getItem('InvestmentSettings') || '{}');
 			InvestmentSettings['lastupdate'] = FH.Main.getCurrentDate();
 			FH.Storage.setItem('InvestmentSettings', JSON.stringify(InvestmentSettings));
-			FH.Storage.setItem('InvestmentArcBonus', FH.Main.ArkBonus);
+			FH.Storage.setItem('InvestmentArcBonus', Investment.ArcBonusKey());
 		}
 	},
 
