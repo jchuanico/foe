@@ -1263,4 +1263,4 @@ let Investment = {
 		Investment.RefreshContributors(CeId); // update the open My GBs tab, if any
 	}
 
-};
+};
