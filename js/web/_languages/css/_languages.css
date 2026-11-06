@@ -1,0 +1,66 @@
+
+
+#TranslationTable.show-only-updated tbody tr:not(.updated), 
+#TranslationTable.show-only-missing tbody tr:not(.missing), 
+#TranslationTable.search-active tbody tr:not(.found), 
+#TranslationTable .hidden {
+    display:none;
+}
+#TranslationHead {
+    position:sticky;
+    top:0;
+    background:#212121;
+}
+#TranslationTable thead th {
+    position: sticky;
+    top: 50px;
+}
+
+#TranslationBody {
+    overflow-y: auto;
+}
+
+#TranslationTable {
+    width: 100%;
+    table-layout: fixed;
+}
+
+#TranslationTable td {
+    width: 50%;   
+}
+
+#TranslationTable td:nth-child(3):hover {
+  background: var(--bg-dark);
+}
+
+#TranslationFooter {
+    position: sticky;
+    width: 100%;
+    bottom: 0;
+    background: var(--bg-darkest);
+}
+
+#TranslationTable tbody textarea {
+    width: 100%;
+    min-height: 10em;
+    box-sizing: border-box;
+}
+
+#CopyJSONInfo ul {
+    width: 350px;
+    display: none;
+}
+
+#CopyJSONInfo:hover ul {
+    display: block;
+}
+
+#TranslationTable td:nth-child(3) b {
+    cursor: pointer;
+    color: orange;
+}
+
+#TranslationTable td:nth-child(3) b:hover {
+    cursor: pointer;
+    color: limegreen;
+}

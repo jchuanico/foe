@@ -1,0 +1,255 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Licensed under AGPL - see LICENSE.md for details.
+ */
+
+FH.proxy.addHandler('HiddenRewardService', 'getOverview', (data, postData) => {
+    let fromHandler = true;
+    HiddenRewards.Cache = HiddenRewards.prepareData(data.responseData.hiddenRewards);
+
+    HiddenRewards.GEprogress = JSON.parse(FH.Storage.getItem('HiddenRewards.GEprogress')||'0');
+   
+    HiddenRewards.RefreshGui(fromHandler);
+    if (HiddenRewards.FirstCycle) { //Timer setzen 
+        HiddenRewards.FirstCycle = false;
+        data.responseData.hiddenRewards.forEach(x=>{
+            if (x.startTime && x.startTime>FH.GameTime.get()) 
+                setTimeout(HiddenRewards.RefreshGui, (x.startTime+5-FH.GameTime.get())*1000)
+        })
+    }
+});
+
+FH.proxy.addHandler('GuildExpeditionService', 'getOverview', (data, postData) => {
+    HiddenRewards.GEprogress = data?.responseData?.progress?.currentEntityId || 0;
+    FH.Storage.setItem('HiddenRewards.GEprogress', JSON.stringify(HiddenRewards.GEprogress));
+    HiddenRewards.RefreshGui();
+});
+
+FH.proxy.addHandler('GuildExpeditionService', 'getState', (data, postData) => {
+    for (let x in data.responseData) {
+        if (!data.responseData.hasOwnProperty(x)) continue;
+        if (!data.responseData[x].hasOwnProperty('currentEntityId')) continue;
+        HiddenRewards.GEprogress = data.responseData[x].currentEntityId;
+        FH.Storage.setItem('HiddenRewards.GEprogress', JSON.stringify(HiddenRewards.GEprogress));
+        HiddenRewards.RefreshGui();
+    }
+});
+
+
+/**
+ *
+ * @type {{init: HiddenRewards.init, prepareData: HiddenRewards.prepareData, BuildBox: HiddenRewards.BuildBox, RefreshGui: HiddenRewards.RefreshGui, Cache: null, FilteredCache : null, FirstCycle : true, GEprogress:0, GElookup:[0,0,1,1,1,2,2,3,3,3]}}
+ */
+let HiddenRewards = {
+
+    Cache: null,
+    FilteredCache : null,
+    FirstCycle: true,
+    GEprogress:0,
+    GElookup:[0,0,1,1,1,2,2,3,3,3],
+    
+	/**
+	 * Box in den DOM
+	 */
+    init: () => {
+        if ($('#HiddenRewardBox').length < 1) {
+
+            FH.HTML.AddCssFile('hidden-rewards');
+
+            FH.HTML.Box({
+                'id': 'HiddenRewardBox',
+                'title': FH.t('Boxes.HiddenRewards.Title'),
+                'auto_close': true,
+                'dragdrop': true,
+                'minimize': true,
+                'resize': true,
+                'settings': HiddenRewards.ShowSettingsButton,
+			    active_maps:"main"
+            });
+
+            //moment.locale(18n('Local'));
+
+            HiddenRewards.RefreshGui();
+
+        } else {
+            FH.HTML.CloseOpenBox('HiddenRewardBox');
+        }
+    },
+
+
+	/**
+	 * Daten aufbereiten
+	 */
+    prepareData: (Rewards) => {
+        let data = [];
+        
+        for (let idx in Rewards) {
+            if (!Rewards.hasOwnProperty(idx)) continue;
+
+            let position = Rewards[idx].position.context;
+            let positionX = Rewards[idx].position.position || 0;
+            let isGE = false;
+            let SkipEvent = true;
+            let twolane = false
+
+            // prüfen ob der Spieler in seiner Stadt eine zweispurige Straße hat
+            if (position === 'cityRoadBig') {
+                if (FH.CurrentEraID >= Technologies.Eras.ProgressiveEra) SkipEvent = false
+                twolane = true
+            }
+            else {
+                SkipEvent = false;
+            }
+            if (position === 'cityUnderwater') {
+                SkipEvent = true;
+            }
+
+            if (position === 'guildExpedition') isGE = true;
+
+            if (SkipEvent) {
+                continue;
+            }
+
+            const positionI18nLookupKey = 'HiddenRewards.Positions.' + position;
+            const positionI18nLookup = FH.t('HiddenRewards.Positions.' + position);
+
+            if (positionI18nLookupKey !== positionI18nLookup) {
+                position = positionI18nLookup;
+            }
+
+            data.push({
+                type: Rewards[idx].type,
+                position: position,
+                starts: Rewards[idx].startTime,
+                expires: Rewards[idx].expireTime,
+                isGE: isGE,
+                positionGE: positionX,
+                twolane: twolane
+            });
+        }
+
+        data.sort(function (a, b) {
+            if (a.expires < b.expires) return -1;
+            if (a.expires > b.expires) return 1;
+            return 0;
+        });
+
+        return data;        
+    },
+
+    /**
+     * Filtert den Cache erneut basierend auf aktueller Zeit + aktualisiert Counter/Liste falls nötig
+     * 
+     */
+    RefreshGui: (fromHandler = false) => {       
+        HiddenRewards.FilteredCache = [];
+        for (let i = 0; i < HiddenRewards.Cache.length; i++) {
+	    let StartTime = moment.unix(HiddenRewards.Cache[i].starts|0),
+		EndTime = moment.unix(HiddenRewards.Cache[i].expires);
+            HiddenRewards.Cache[i].isVis = true;
+            if (StartTime > FH.Main.getCurrentDateTime() || EndTime < FH.Main.getCurrentDateTime()) continue;
+            if (HiddenRewards.Cache[i].isGE && !(HiddenRewards.GElookup[HiddenRewards.Cache[i].positionGE] <= Math.floor((HiddenRewards.GEprogress % 32)/8))) {
+                HiddenRewards.Cache[i].isVis = false;
+            }
+            HiddenRewards.FilteredCache.push(HiddenRewards.Cache[i]);
+        }
+
+        HiddenRewards.SetCounter();
+
+        if ($('#HiddenRewardBox').length >= 1) {
+            if(fromHandler && HiddenRewards.FilteredCache.length === 0 && $('#HiddenRewardBox').length) 
+            {
+                $('#HiddenRewardBox').fadeOut('500', function() {
+                    $(this).remove();
+                });
+            }
+            else 
+            {
+                HiddenRewards.BuildBox();
+            }
+        }  
+    },
+
+
+	/**
+	 * Inhalt der Box in den BoxBody legen
+	 */
+    BuildBox: () => {
+        let h = [];
+
+        let twolane = 0 < [...new Set(Object.values(FH.Main.CityMapData).filter(x=>x.type=="street").map(x=>x.cityentity_id))].filter(x=>FH.Main.CityEntities[x].requirements.street_connection_level == 2).length
+        let warning = HiddenRewards.FilteredCache.filter(x=>x.twolane).length > 0 && !twolane
+        if (warning) {
+            h.push(`<div class="dark-bg"><div class="warning">${FH.t("Boxes.HiddenRewards.twolaneWarning")}</div></div>`)
+        }
+        h.push('<table class="foe-table">');
+
+        h.push('<thead>');
+        h.push('<tr>');
+        h.push('<th>' + FH.t('HiddenRewards.Table.type') + '</th>');
+        h.push('<th>' + FH.t('HiddenRewards.Table.position') + '</th>');
+        h.push('<th>' + FH.t('HiddenRewards.Table.expires') + '</th>');
+        h.push('</tr>');
+        h.push('</thead>');
+
+        h.push('<tbody>');
+
+        if (HiddenRewards.FilteredCache.length > 0) {
+            for (let idx in HiddenRewards.FilteredCache) {
+
+                if (!HiddenRewards.FilteredCache.hasOwnProperty(idx)) {
+                    break;
+                }
+				
+                let hiddenReward = HiddenRewards.FilteredCache[idx];
+				
+		
+                h.push(`<tr ${!hiddenReward.isVis ? 'class="unavailable"':''}>`);
+                let img =  hiddenReward.type;
+                if (hiddenReward.type.indexOf('outpost') > -1) {
+                    img = 'Shard_' + hiddenReward.type.substr(hiddenReward.type.length-2, 2);
+                }
+                h.push('<td class="incident" title="' + FH.HTML.Tooltip(hiddenReward.type) + '"><img src="' + FH.extUrl + 'js/web/hidden-rewards/images/' + img + '.png" alt=""></td>');
+                h.push('<td>' + hiddenReward.position + '</td>');
+                h.push('<td class="">' + FH.t('Boxes.HiddenRewards.Disappears') + ' ' + moment.unix(hiddenReward.expires).fromNow() + '</td>');
+                h.push('</tr>');
+            }
+        }
+        else {
+            h.push('<td colspan="3">' + FH.t('Boxes.HiddenRewards.NoEvents') + '</td>');
+        }
+
+        h.push('</tbody>');
+
+        h.push('</table>');
+
+        $('#HiddenRewardBoxBody').html(h.join(''));
+    },
+
+
+	SetCounter: ()=> {
+        let list = HiddenRewards.FilteredCache || [];
+        let count = list.length;
+        let CountRelics = JSON.parse(FH.Storage.getItem('CountRelics') || 0);
+        if (CountRelics == 1) count = list.filter(x => x.isVis).length;
+        if (CountRelics == 2) count = list.filter(x => !x.isGE).length;
+        $('#hidden-reward-count').text(count).show();
+        if (count === 0) $('#hidden-reward-count').hide();
+	},
+    
+    ShowSettingsButton: () => {
+        let CountRelics = JSON.parse(FH.Storage.getItem('CountRelics') || 0);
+        let h = [];
+        h.push(`<p class="text-center"><label for="countrelics">${FH.t('Settings.CountRelics')}<label><br>`);
+        h.push(`<select oninput="HiddenRewards.SaveSettings(this.value)"/><option value="0" ${CountRelics == 0 ? 'selected="selected"': ''}>${FH.t('Boxes.HiddenRewards.CountAll')} </option><option value="1" ${CountRelics == 1 ? 'selected="selected"': ''}>${FH.t('Boxes.HiddenRewards.onlyVis')} </option><option value="2" ${CountRelics == 2 ? 'selected="selected"': ''}>${FH.t('Boxes.HiddenRewards.none')} </option></p>`);
+        $('#HiddenRewardBoxSettingsBox').html(h.join(''));
+    },
+
+    /**
+    *
+    */
+    SaveSettings: (value='0') => {
+        FH.Storage.setItem('CountRelics', value);
+        HiddenRewards.SetCounter();
+    },
+};

@@ -1,0 +1,238 @@
+ /*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Copyright (C) 2026 Forge Hammer
+ * Licensed under AGPL - see LICENSE.md for details.
+ */
+
+#SettingsBox {
+	top: calc(50vh - 210px);
+	left: calc(50vw - 350px);
+	width: 700px;
+	height: 420px;
+	font-size: 90%;
+}
+
+#SettingsBoxBody {
+	overflow-y: auto;
+}
+
+#SettingsBoxBody h2 {
+	font-size: 115%;
+	font-weight: 700;
+	color: var(--text-highlight2);
+	margin: 0 0 5px;
+}
+
+#SettingsBoxBody a.kofi {
+	display: inline-block;
+    padding: 5px 10px;
+    border-radius: 10px;
+    background-color: #202020;
+	color: #fff !important;
+	font-weight: bold;
+	text-shadow: none;
+	margin-bottom: 10px;
+	line-height: 22px;
+}
+
+#SettingsBoxBody a.kofi:hover {
+	text-decoration: none;
+    background-color: #ff5a16;
+	color: #202020 !important;
+}
+
+#SettingsBoxBody .kofi img {
+	height: 22px;
+}
+
+#SettingsBoxBody .item-row .desc {
+	margin: 10px 0;
+}
+
+#SettingsBoxBody .item-row .check {
+	border-radius: 4px;
+	position: relative;
+	display: inline-block;
+	width: 140px;
+	margin: 2px 2px 2px 0;
+	box-shadow: var(--menu-shadow);
+	background-image: var(--tabs-bg-active);
+}
+
+#SettingsBoxBody .item-row .unchecked {
+	background-image: var(--tabs-bg);
+}
+
+#SettingsBoxBody .item-row .check input.setting-check {
+	position: absolute;
+	right: 4px;
+	top: 4px;
+	transform: scale(1.3);
+}
+
+#SettingsBoxBody .item-row .check span.toogle-word {
+	display: block;
+	text-align: center;
+	line-height: 30px;
+	font-size: 0.9rem;
+	color: var(--switch-text-active);
+	font-weight: 700;
+	width: 113px;
+	line-height: 26px;
+	border-right: 1px solid var(--bg-dark);
+}
+
+#SettingsBoxBody .item-row .check.unchecked span.toogle-word {
+	color: var(--switch-text);
+}
+
+#SettingsBoxBody .item-row .btn:not(.btn-mid),
+#SettingsBoxBody .item-row .setting-dropdown {
+	width: 172px;
+	padding: 4px 0;
+}
+
+#SettingsBoxBody .item-row input[type=number] {
+	width: 152px;
+	padding: 4px 8px;
+	text-align: center;
+	font-weight: 700;
+}
+
+#SettingsBoxBody .item-row dl {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	width: 173px;
+	user-select: text;
+}
+
+#SettingsBoxBody .item-row dl dt {
+	width: 86px;
+}
+#SettingsBoxBody .item-row dl dd {
+	width: 86px;
+	margin-inline-start: 0;
+}
+
+.settings-sub {
+	display: flex;
+	-ms-flex-align: stretch!important;
+	align-items: stretch!important;
+	height: 100%;
+}
+
+#SettingsBoxBody .settings-wrapper {
+	position: absolute;
+	top: 69px;
+	bottom: 0;
+	left: 0;
+	right: 0;
+}
+
+#SettingsBoxBody .tabs ul.horizontal {
+	display: flex;
+	justify-content: space-around;
+}
+
+#SettingsBoxBody .tabs ul.horizontal li {
+	width: 25%;
+	text-align: center;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	max-height: 35px;
+}
+
+#SettingsBoxBody .tabs ul.vertical {
+	position: static;
+	width: 234px;
+	height: auto;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+#SettingsBoxBody .tabs .sub-tab {
+	margin-left: 0;
+	margin-bottom: 0;
+	margin-top: 0;
+	border-left: 0;
+	width: 100%;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+#SettingsBoxBody ul.foe-table.gameFilters li > * {
+	flex-grow: unset;
+}
+
+#SettingsBoxBody ul.foe-table.gameFilters span {
+	width: 100px
+}
+
+/* label | control | preview - the custom pattern gets a second row of its own */
+#SettingsBoxBody .dateFormats .dateformat-row {
+	display: grid;
+	grid-template-columns: 110px minmax(120px, 1fr) auto;
+	align-items: center;
+	gap: 4px 8px;
+	margin-bottom: 6px;
+}
+
+#SettingsBoxBody .dateFormats label {
+	grid-column: 1;
+}
+
+#SettingsBoxBody .dateFormats .dateformat-select {
+	grid-column: 2 / span 2;
+	width: 100%;
+}
+
+#SettingsBoxBody .dateFormats .dateformat-custom,
+#SettingsBoxBody .dateFormats .dateformat-preview {
+	display: none;
+}
+
+#SettingsBoxBody .dateFormats .custom .dateformat-custom {
+	display: block;
+	grid-column: 2;
+	width: 100%;
+	min-width: 0;
+	padding: 3px 6px;
+}
+
+#SettingsBoxBody .dateFormats .custom .dateformat-preview {
+	display: block;
+	grid-column: 3;
+	min-width: 0;
+	color: var(--text-highlight);
+	font-weight: 700;
+}
+
+#SettingsBoxBody .soundEffects audio {
+	height: 22px;
+	width: 250px;
+}
+
+#SettingsBoxBody .info-box {
+	border: 1px solid var(--text-dark);
+	padding: 5px;
+	user-select: all;
+	display: flex;
+    gap: 5px 20px;
+    justify-content: center;
+	flex-wrap: wrap;
+}
+
+#SettingsBoxBody hr {
+	border: 1px solid var(--text-dark);
+}
+
+.setting .hud-btn {
+	margin-right: 6px;
+	margin-bottom: 6px;
+	width: 45px !important;
+	height: 45px !important;
+	text-align: center;
+	float: left;
+}

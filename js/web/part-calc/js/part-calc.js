@@ -1,0 +1,1790 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Copyright (C) 2026 Forge Hammer
+ * Licensed under AGPL - See LICENSE.md for full license details.
+*/
+
+// leveled alien GB
+FH.proxy.addWsHandler('OtherPlayerService', 'newEvent', data => {
+	if (!FH.Main.CurrentGB.Entity || !FH.Main.CurrentGB.Rankings) return; // Noch kein LG offen
+	if (data.responseData['type'] !== 'great_building_contribution') return; // Nur LG Events
+	if (!data.responseData['other_player']) return; // Nur fremde LGs
+	if (data.responseData['other_player']['player_id'] !== FH.Main.CurrentGB.Entity['player_id']) return; // Selber Spieler
+
+	let Entity = Object.values(FH.Main.CityEntities).find(obj => (obj['name'] === data.responseData['great_building_name']));
+	if (!Entity) return; // GB not found
+
+	if (Entity['id'] !== FH.Main.CurrentGB.Entity['cityentity_id']) return; // Selbes LG
+
+	if ($('#OwnPartBox').length > 0) {
+		let NewLevel = data.responseData['level'];
+		Parts.CalcBody(NewLevel);
+		if (Parts.PlayInfoSound) {
+			FH.helper.sounds.play("Calculator");
+		}
+	}
+});
+
+FH.proxy.addHandler("GreatBuildingsService","getConstruction", (data,postData) => {
+	if ($('#OwnPartBox').length === 0 && FH.Storage.getItem('CalcAutoOpen') == 'true' && postData[0].requestData[1] !== FH.Player.ID) {
+		Parts.View = 'calculator';
+		Parts.Show();
+	}
+	if ($('#OwnPartBox').length === 0 && FH.Storage.getItem('OwnPartAutoOpen') == 'true') 
+		Parts.Show();
+});
+
+FH.proxy.addHandler("all","all", (data,postData) => {
+	if (!Parts.allowCopyPlaceSetting) return;
+	if (["GreatBuildingsService.unlockLevel","GreatBuildingsService.getConstruction"].includes(data.requestClass + "." + data.requestMethod)) {
+		Parts.allowCopyPlace = true;
+		Parts.allowCopyPlaceSetting = false;
+		setTimeout(()=>{Parts.allowCopyPlaceSetting = true}, 2000)
+	} else if (	![
+		"BlueprintService.getGreatBuildingInventoryForGreatBuilding",
+		"BlueprintService.unlockLevel",
+		"CityMapService.reset",
+		"CityMapService.updateEntity",
+		"GreatBuildingsService.contributeForgePoints",
+		"GreatBuildingsService.getAvailablePackageForgePoints",
+		"GreatBuildingsService.getConstructionRanking",
+		"GreatBuildingsService.getUnlockCosts",
+		"GreatBuildingsService.getOtherPlayerOverview",
+		"InventoryService.getItemAmount",
+		"InventoryService.updateItem",
+		"MessageService.newMessage",
+		"QuestService.getQuestCategoryTimes",
+		"QuestService.getUpdates",
+		"ResourceService.getPlayerAutoRefills",
+		"ResourceService.getPlayerResourceBag",
+		"TimeService.updateTime"
+		].includes(data.requestClass + "." + data.requestMethod)) {
+		Parts.allowCopyPlace = false;
+	}
+});
+
+FH.proxy.addCustomHandler('QuestsUpdated', data => {
+	if ($('#OwnPartBox').length > 0) {
+		Parts.CalcBody();
+	}
+});
+
+
+let Parts = {
+	View: '', // partcalc or calculator
+	Rankings: undefined,
+	IsPreviousLevel: false,
+	IsNextLevel: false,
+
+	Level: undefined,
+	SafePlaces: undefined,
+	DangerPlaces: undefined,
+	LeveltLG: undefined,
+	Maezens: [],
+	LockedMaezens: [],
+	MaezenSlots: 5,
+
+	CurrentMaezens: [],
+	RemainingOwnPart: null,
+
+	PowerLevelingStartLevel: null,
+	PowerLevelingEndLevel: 999999,
+	PowerLevelingData: null,
+
+	PlaceAvailables: [],
+	CopyString: null,
+	CopyStrings: {},
+
+	DefaultButtons: { copper: [80, 90, 100, 'contribution_boost'], gold: [10, 20, 'contribution_boost_gold']},
+
+	// Settings
+	CopyFormatPerGB: false,
+
+	FirstCycle: true,
+	LastPlayerID: null,
+	LastEntityID: null,
+	LastLevel: null,
+
+	PlayInfoSound: null,
+
+	ArcPerConversation: false,
+	LastArcConversationID: undefined,
+
+	LockExistingPlaces: true,
+	TrustExistingPlaces: false,
+
+	ArcPercents: [90, 90, 90, 90, 90],
+	Exts: [0, 0, 0, 0, 0],
+
+	//Settings Copybox
+	CopyOwnPlayerName: null,
+	CopyPlayerName: null,
+	CopyBuildingName: null,
+
+	CopyPreP: true,
+	CopySettings: {
+		includePlayer: true,
+		includeGB: true,
+		includeFP: true,
+		includeLevel: false,
+		includeLevelString: false,
+		includeDanger: false,
+		includeOwnPart: false,
+		descending: true,
+		dangerPrefix: '!!!',
+		dangerSuffix: '',
+	},
+
+	CopyModeAll: false,
+	CopyModeAuto: true,
+	CopyModeAutoUnsafe: false,
+	CopyPlaces: [false, false, false, false, false],
+	allowCopyPlace: false,
+	allowCopyPlaceSetting: true,
+
+	Show: (view = '') => {
+		if ($('#OwnPartBox').length === 0) {
+			/*let spk = FH.Storage.getItem('PartsTone');
+
+			if (spk === null) {
+				FH.Storage.setItem('PartsTone', 'deactivated');
+				Parts.PlayInfoSound = false;
+			}
+			else {
+				Parts.PlayInfoSound = (spk !== 'deactivated');
+			}*/
+
+			FH.HTML.Box({
+				id: 'OwnPartBox',
+				title: FH.t('Boxes.OwnpartCalculator.Title'),
+				auto_close: true,
+				dragdrop: true,
+				minimize: true,
+				settings: Parts.ShowCalculatorSettings,
+			    active_maps:"main",
+				custom_buttons: [{class: "window-viewswitch", callback: Parts.SwitchCalculator}]
+			});
+
+			FH.HTML.AddCssFile('part-calc');
+
+			if (FH.Main.CurrentGB.Entity !== undefined && FH.Main.CurrentGB.Rankings !== undefined) Parts.CalcBody();
+
+			/*$('#OwnPartBox').on('click', '#PartsTone', function () {
+				let disabled = $(this).hasClass('deactivated');
+
+				FH.Storage.setItem('PartsTone', (disabled ? '' : 'deactivated'));
+				Parts.PlayInfoSound = !!disabled;
+
+				if (disabled === true) {
+					$('#PartsTone').removeClass('deactivated');
+				} else {
+					$('#PartsTone').addClass('deactivated');
+				}
+			});*/
+
+			// LockExistingPayments
+			$('#OwnPartBox').on('click', '.lockexistingpayments', function () {
+				let $this = $(this),
+					v = $this.prop('checked');
+
+				Parts.LockExistingPlaces = v;
+				Parts.CalcBody();
+			});
+
+			// TrustExistingPayments
+			$('#OwnPartBox').on('click', '.trustexistingpayments', function () {
+				let $this = $(this),
+					v = $this.prop('checked');
+
+				Parts.TrustExistingPlaces = v;
+				Parts.CalcBody();
+			});
+
+
+			// ArcPercents
+			$('#OwnPartBox').on('blur', '.arc-percent-input', function () {
+				let ArcPercents = [];
+
+				$('.arc-percent-input').each(function () {
+					let ArkBonus = parseFloat($(this).val());
+					if(isNaN(ArkBonus)) ArkBonus = 0;
+					ArcPercents.push(ArkBonus);
+				});
+
+				Parts.ArcPercents = ArcPercents;
+				FH.Storage.setItem(Parts.GetConversationStorageKey(), JSON.stringify(ArcPercents));
+				FH.Storage.setItem('GBOwnBoost', ArcPercents.every(x => x === Parts.GetArcBoost()));
+
+				Parts.CalcBody(Parts.Level);
+			});
+
+			$(`<span class="window-showToPay${Calculator.ReadyToOpen ? '' : ' inactive'}"></span>`).
+				on('click', ()=>{Calculator.showToPay(true)}).
+				prependTo("#OwnPartBoxButtons");
+
+			// Exts
+			for (let i = 0; i < GreatBuildings.GreatBuildingsData.length; i++) {
+				$('#OwnPartBox').on('blur', '.ext-part-input' + i, function () {
+					Parts.Exts[i] = parseFloat($('.ext-part-input' + i).val());
+					if (isNaN(Parts.Exts[i])) Parts.Exts[i] = 0;
+					Parts.CalcBody(Parts.Level);
+				});
+			}
+
+			// eine neuer globaler Arche-Satz wird gewählt
+			$('#OwnPartBox').off('click', '.btn-set-arc').on('click', '.btn-set-arc', function () {
+				let ArkBonus = parseFloat($(this).data('value'));
+				if (ArkBonus !== ArkBonus) ArkBonus = 0; //NaN => 0
+
+				for (let i = 0; i < Parts.MaezenSlots; i++) {
+					Parts.ArcPercents[i] = ArkBonus;
+					$('.arc-percent-input').eq(i).val(ArkBonus);
+				}
+
+				FH.Storage.setItem(Parts.GetConversationStorageKey(), JSON.stringify(Parts.ArcPercents));
+				FH.Storage.setItem('GBOwnBoost', ArkBonus === Parts.GetArcBoost());
+
+				Parts.CalcBody(Parts.Level);
+			});
+
+			// Next/Previous level
+			$('#OwnPartBox').off('click', '.btn-set-level:not(.disabled)').on('click', '.btn-set-level:not(.disabled)', function () {
+				let Level = parseFloat($(this).data('value'));
+				if (isNaN(Level)) Level = 0;
+				Parts.CalcBody(Level);
+			});
+
+			$('#OwnPartBox').on('click', '.button-powerleveling:not(.disabled)', function () {
+				// Reset power leveling range
+				Parts.PowerLevelingStartLevel = Parts.Level;
+				Parts.PowerLevelingEndLevel = 999999;
+				Parts.ShowPowerLeveling(false);
+			});
+
+			$('#OwnPartBox').on('click', '.button-own', function () {
+				let copyParts = Parts.CopyFunction($(this), 'copy');
+				FH.helper.str.copyToClipboardLegacy(copyParts);
+				Parts.CalcBody(Parts.Level);
+				if ($('#OwnPartBox').hasClass('gbSettingsOpen')) {
+					$('.OwnPartBoxBackgroundBody').fadeToggle();
+					$('#OwnPartBox').toggleClass('gbSettingsOpen');
+				}
+			});
+
+			$('#OwnPartBox').on('click', '.button-save-own', function () {
+				let copyParts = Parts.CopyFunction($(this), 'save');
+				FH.helper.str.copyToClipboardLegacy(copyParts);
+				Parts.CalcBody(Parts.Level);
+				if ($('#OwnPartBox').hasClass('gbSettingsOpen')) {
+					$('.OwnPartBoxBackgroundBody').fadeToggle();
+					$('#OwnPartBox').toggleClass('gbSettingsOpen');
+				}
+			});
+
+			// Quick copy for FP values (places + remaining to level)
+			$('#OwnPartBox').on('click', '.copy-fp', function (e) {
+				e.preventDefault();
+				e.stopPropagation();
+				let $this = $(this),
+					value = $this.data('copy');
+
+				if (value === undefined || value === '' || value === '-') return;
+
+				Parts.setDonation(value);
+
+				//prevent double action
+				$this.addClass('copied');
+				setTimeout(() => $this.removeClass('copied'), 800);
+			});
+
+			// CopyBox
+			$('#OwnPartBox').on('blur', '#player-name', function () {
+				let PlayerName = $('#player-name').val();
+
+				Parts.CopyOwnPlayerName = PlayerName;
+				FH.Storage.setItem(Parts.GetStorageKey('CopyOwnPlayerName', null), PlayerName);
+
+				Parts.CalcBackgroundBody();
+			});
+
+			$('#OwnPartBox').on('blur', '#build-name', function () {
+				let BuildingName = $('#build-name').val();
+
+				Parts.CopyBuildingName = BuildingName;
+				FH.Storage.setItem(Parts.GetStorageKey('CopyGBName', FH.Main.CurrentGB.Entity['cityentity_id']), BuildingName);
+
+				Parts.CalcBackgroundBody();
+			});
+
+			$('#OwnPartBox').on('blur', '#copystring', function () {
+				let CopyString = $('#copystring').val();
+
+				Parts.CopyString = CopyString;
+			});
+
+			$('#OwnPartBox').on('click', '.form-check-input', function () {
+				let PlaceName = $(this).data('place');
+				if (PlaceName) {
+					if (PlaceName === 'all') { //all: auto deaktivieren, P1-5 aktivieren
+						Parts.CopyModeAll = true;
+						Parts.CopyModeAuto = false;
+						Parts.CopyModeAutoUnsafe = false;
+					}
+					else if (PlaceName === 'auto') { //auto: all/auto-unsafe deaktivieren, P1-P5 ermitteln
+						Parts.CopyModeAll = false;
+						Parts.CopyModeAuto = true;
+						Parts.CopyModeAutoUnsafe = false;
+
+					}
+					else if (PlaceName === 'auto-unsafe') { //auto-unsafe: all/auto deaktivieren, P1-5 ermitteln
+						Parts.CopyModeAll = false;
+						Parts.CopyModeAuto = false;
+						Parts.CopyModeAutoUnsafe = true;
+
+					}
+					else { //P1-5: auto und all deaktivieren
+						Parts.CopyModeAll = false;
+						Parts.CopyModeAuto = false;
+						Parts.CopyModeAutoUnsafe = false;
+
+						Parts.CopyPlaces[PlaceName-1] = !Parts.CopyPlaces[PlaceName-1];
+					}
+				}
+
+				let OptionsName = $(this).data('options');
+				if (OptionsName) {
+					let StorageKey;
+
+					if (OptionsName === 'danger') {
+						Parts.CopySettings.includeDanger = !Parts.CopySettings.includeDanger;
+						StorageKey = Parts.GetStorageKey('CopyIncludeDanger', (Parts.CopyFormatPerGB ? FH.Main.CurrentGB.Entity['cityentity_id'] : null));
+						FH.Storage.setItem(StorageKey, Parts.CopySettings.includeDanger);
+					}
+					else if (OptionsName === 'player') {
+						Parts.CopySettings.includePlayer = !Parts.CopySettings.includePlayer;
+						StorageKey = Parts.GetStorageKey('CopyIncludePlayer', (Parts.CopyFormatPerGB ? FH.Main.CurrentGB.Entity['cityentity_id'] : null));
+						FH.Storage.setItem(StorageKey, Parts.CopySettings.includePlayer);
+					}
+					else if (OptionsName === 'gb') {
+						Parts.CopySettings.includeGB = !Parts.CopySettings.includeGB;
+						StorageKey = Parts.GetStorageKey('CopyIncludeGB', (Parts.CopyFormatPerGB ? FH.Main.CurrentGB.Entity['cityentity_id'] : null));
+						FH.Storage.setItem(StorageKey, Parts.CopySettings.includeGB);
+					}
+					else if (OptionsName === 'level') {
+						Parts.CopySettings.includeLevel = !Parts.CopySettings.includeLevel;
+						StorageKey = Parts.GetStorageKey('CopyIncludeLevel', (Parts.CopyFormatPerGB ? FH.Main.CurrentGB.Entity['cityentity_id'] : null));
+						FH.Storage.setItem(StorageKey, Parts.CopySettings.includeLevel);
+					}
+					else if (OptionsName === 'fp') {
+						Parts.CopySettings.includeFP = !Parts.CopySettings.includeFP;
+						StorageKey = Parts.GetStorageKey('CopyIncludeFP', (Parts.CopyFormatPerGB ? FH.Main.CurrentGB.Entity['cityentity_id'] : null));
+						FH.Storage.setItem(StorageKey, Parts.CopySettings.includeFP);
+					}
+					else if (OptionsName === 'descending') {
+						Parts.CopySettings.descending = !Parts.CopySettings.descending;
+						StorageKey = Parts.GetStorageKey('CopyDescending', (Parts.CopyFormatPerGB ? FH.Main.CurrentGB.Entity['cityentity_id'] : null));
+						FH.Storage.setItem(StorageKey, Parts.CopySettings.descending);
+					}
+					else if (OptionsName === 'levelup') {
+						Parts.CopySettings.includeLevelString = !Parts.CopySettings.includeLevelString;
+						StorageKey = Parts.GetStorageKey('CopyIncludeLevelString', (Parts.CopyFormatPerGB ? FH.Main.CurrentGB.Entity['cityentity_id'] : null));
+						FH.Storage.setItem(StorageKey, Parts.CopySettings.includeLevelString);
+					}
+					else if (OptionsName === 'ownpart') {
+						Parts.CopySettings.includeOwnPart = !Parts.CopySettings.includeOwnPart;
+						StorageKey = Parts.GetStorageKey('CopyIncludeOwnPart', (Parts.CopyFormatPerGB ? FH.Main.CurrentGB.Entity['cityentity_id'] : null));
+						FH.Storage.setItem(StorageKey, Parts.CopySettings.includeOwnPart);
+					}
+					else if (OptionsName === 'prep') {
+						Parts.CopyPreP = !Parts.CopyPreP;
+						StorageKey = Parts.GetStorageKey('CopyPreP', (Parts.CopyFormatPerGB ? FH.Main.CurrentGB.Entity['cityentity_id'] : null));
+						FH.Storage.setItem(StorageKey, Parts.CopyPreP);
+					}
+				}
+
+				Parts.CalcBackgroundBody();
+			});
+
+			$('#OwnPartBox').on('blur', '.form-text-input', function () {
+				let OptionsName = $(this).data('options');
+				if (OptionsName) {
+					let StorageKey;
+
+					if (OptionsName === 'danger-prefix') {
+						Parts.CopySettings.dangerPrefix = $(this).val();
+						StorageKey = Parts.GetStorageKey('CopyDangerPrefix', (Parts.CopyFormatPerGB ? FH.Main.CurrentGB.Entity['cityentity_id'] : null));
+						FH.Storage.setItem(StorageKey, Parts.CopySettings.dangerPrefix);
+					}
+					else if (OptionsName === 'danger-suffix') {
+						Parts.CopySettings.dangerSuffix = $(this).val();
+						StorageKey = Parts.GetStorageKey('CopyDangerSuffix', (Parts.CopyFormatPerGB ? FH.Main.CurrentGB.Entity['cityentity_id'] : null));
+						FH.Storage.setItem(StorageKey, Parts.CopySettings.dangerSuffix);
+					}
+				}
+
+				Parts.CalcBackgroundBody();
+			});
+
+			$('#OwnPartBox').on('click', '.btn-toggle-arc', function () {
+				Calculator.ForderBonus = parseFloat($(this).data('value'));
+				$('#costFactor').val(Calculator.ForderBonus);
+				let StorageKey = (Calculator.ForderBonusPerConversation && FH.Main.OpenConversation ? 'CalculatorForderBonus_' + FH.Main.OpenConversation.id : 'CalculatorForderBonus');
+				FH.Storage.setItem(StorageKey, Calculator.ForderBonus);
+				Calculator.Show();
+			});
+
+			$('#OwnPartBox').on('blur', '#costFactor', function () {
+				Calculator.ForderBonus = parseFloat($('#costFactor').val());
+				let StorageKey = (Calculator.ForderBonusPerConversation && FH.Main.OpenConversation ? 'CalculatorForderBonus_' + FH.Main.OpenConversation.id : 'CalculatorForderBonus');
+				FH.Storage.setItem(StorageKey, Calculator.ForderBonus);
+				Calculator.Show();
+			});
+
+			$('#OwnPartBox').on('click', '#OwnPartCalcGBSettings, .icon-close', function() {
+				$('.OwnPartBoxBackgroundBody').fadeToggle();
+				$('#OwnPartBox').toggleClass('gbSettingsOpen');
+			});
+
+			if (FH.Main.CurrentGB.Entity !== undefined && FH.Main.CurrentGB.Rankings !== undefined) Parts.CalcBody();
+		}
+		else {
+			FH.HTML.CloseOpenBox('OwnPartBox');
+			FH.HTML.CloseOpenBox('PowerLevelingBox');
+		}
+	},
+
+
+	CalcBody: async (NextLevel) => {
+		await FH.StartUpDone;
+		if (FH.Main.CurrentGB.Entity.level === NextLevel) NextLevel = 0;
+
+		// check for gold tier
+		Parts.MaezenSlots = FH.Main.CurrentGB.Entity.tier === 'gold' ? 7 : 5;
+		while (Parts.ArcPercents.length < Parts.MaezenSlots) Parts.ArcPercents.push(Parts.ArcPercents[0] ?? 90);
+  		while (Parts.Exts.length < Parts.MaezenSlots) Parts.Exts.push(0);
+
+		Calculator.showToPay();
+			
+		if (FH.Main.CurrentGB.Entity.player_id !== FH.Player.ID)  // cannot use the other view
+			$('#OwnPartBox .window-viewswitch').removeClass('inactive');
+		else
+			$('#OwnPartBox .window-viewswitch').addClass('inactive');
+
+		// load other calculator if selected
+		let useThisCalculator = JSON.parse(FH.Storage.getItem('ShowOwnPartOnAllGBs'));
+		if ((!useThisCalculator && FH.Main.CurrentGB.Entity.player_id !== FH.Player.ID && !(Parts.View === 'partcalc')) 
+			|| (Parts.View === 'calculator' && FH.Main.CurrentGB.Entity.player_id !== FH.Player.ID)) {
+			Calculator.Show();
+			return;
+		}
+
+		let PlayerID = FH.Main.CurrentGB.Entity['player_id'],
+			EntityID = FH.Main.CurrentGB.Entity['cityentity_id'],
+			CityEntity = FH.Main.CityEntities[EntityID],
+			EraName = GreatBuildings.GetEraName(EntityID),
+			Era = Technologies.Eras[EraName];
+
+		let Total; // Total FP of the current level
+
+		if (NextLevel) {		
+			Parts.IsPreviousLevel = false;
+			Parts.IsNextLevel = true;
+			Parts.Level = NextLevel;
+			Total = GreatBuildings.GetBruttoCosts(EntityID, NextLevel);
+		}
+		else {
+			Parts.IsNextLevel = false;
+			Parts.Level = FH.Main.CurrentGB.Entity['level'];
+			Total = parseInt(FH.Main.CurrentGB.Entity['state']['forge_points_for_level_up']);
+		}
+
+		Parts.ArcPerConversation = (FH.Storage.getItem('OwnPartArcPerConversation') === 'true');
+		if (Parts.FirstCycle || (Parts.ArcPerConversation && (FH.Main.OpenConversation?.id ?? null) !== Parts.LastArcConversationID)) {
+			Parts.GetConversationBonus();
+		}
+
+		let PersonalBoost = Parts.GetArcBoost();
+		if (FH.Storage.getItem('GBOwnBoost') === 'true' && Parts.ArcPercents.some(x => x !== PersonalBoost)) {
+			Parts.ArcPercents = Parts.ArcPercents.map(() => PersonalBoost);
+			FH.Storage.setItem(Parts.GetConversationStorageKey(), JSON.stringify(Parts.ArcPercents));
+		}
+
+		// Restore Default settings
+		if (Parts.FirstCycle) {
+			let SavedCopyOwnPlayerName = FH.Storage.getItem(Parts.GetStorageKey('CopyOwnPlayerName', null));
+			if (SavedCopyOwnPlayerName !== null) {
+				Parts.CopyOwnPlayerName = SavedCopyOwnPlayerName
+			}
+			else {
+				Parts.CopyOwnPlayerName = FH.Player.Name;
+			}
+
+			Parts.CopyFormatPerGB = (FH.Storage.getItem(Parts.GetStorageKey('CopyFormatPerGB', null)) === 'true');
+			if (!Parts.CopyFormatPerGB) {
+				let SavedCopyIncludeDanger = FH.Storage.getItem(Parts.GetStorageKey('CopyIncludeDanger', null));
+				if (SavedCopyIncludeDanger !== null) Parts.CopySettings.includeDanger = (SavedCopyIncludeDanger === 'true');
+
+				let SavedCopyDangerPrefix = FH.Storage.getItem(Parts.GetStorageKey('CopyDangerPrefix', null));
+				if (SavedCopyDangerPrefix !== null) Parts.CopySettings.dangerPrefix = SavedCopyDangerPrefix;
+
+				let SavedCopyDangerSuffix = FH.Storage.getItem(Parts.GetStorageKey('CopyDangerSuffix', null));
+				if (SavedCopyDangerSuffix !== null) Parts.CopySettings.dangerSuffix = SavedCopyDangerSuffix;
+
+				let SavedCopyIncludePlayer = FH.Storage.getItem(Parts.GetStorageKey('CopyIncludePlayer', null));
+				if (SavedCopyIncludePlayer !== null) Parts.CopySettings.includePlayer = (SavedCopyIncludePlayer === 'true');
+
+				let SavedCopyIncludeGB = FH.Storage.getItem(Parts.GetStorageKey('CopyIncludeGB', null));
+				if (SavedCopyIncludeGB !== null) Parts.CopySettings.includeGB = (SavedCopyIncludeGB === 'true');
+
+				let SavedCopyIncludeLevel = FH.Storage.getItem(Parts.GetStorageKey('CopyIncludeLevel', null));
+				if (SavedCopyIncludeLevel !== null) Parts.CopySettings.includeLevel = (SavedCopyIncludeLevel === 'true');
+
+				let SavedCopyIncludeFP = FH.Storage.getItem(Parts.GetStorageKey('CopyIncludeFP', null));
+				if (SavedCopyIncludeFP !== null) Parts.CopySettings.includeFP = (SavedCopyIncludeFP === 'true');
+
+				let SavedCopyIncludeOwnPart = FH.Storage.getItem(Parts.GetStorageKey('CopyIncludeOwnPart', null));
+				if (SavedCopyIncludeOwnPart !== null) Parts.CopySettings.includeOwnPart = (SavedCopyIncludeOwnPart === 'true');
+
+				let SavedCopyPreP = FH.Storage.getItem(Parts.GetStorageKey('CopyPreP', null));
+				if (SavedCopyPreP !== null) Parts.CopyPreP = (SavedCopyPreP === 'true');
+
+				let SavedCopyDescending = FH.Storage.getItem(Parts.GetStorageKey('CopyDescending', null));
+				if (SavedCopyDescending !== null) Parts.CopySettings.descending = (SavedCopyDescending === 'true');
+			}
+		}
+
+		if (PlayerID !== Parts.LastPlayerID || EntityID !== Parts.LastEntityID) { 
+			Parts.CopyModeAuto = true;
+			Parts.CopyModeAll = false;
+			Parts.CopyModeAutoUnsafe = false;
+		}
+
+		if (PlayerID !== Parts.LastPlayerID || EntityID !== Parts.LastEntityID || Parts.Level !== Parts.LastLevel) {
+			Parts.LockExistingPlaces = true;
+			Parts.TrustExistingPlaces = false;
+			for (let i = 0; i < Parts.MaezenSlots; i++) Parts.Exts[i] = 0;
+			Parts.CopySettings.includeLevelString = false;
+		}
+
+		Parts.FirstCycle = false;
+		Parts.LastPlayerID = PlayerID;
+		Parts.LastEntityID = EntityID;
+		Parts.LastLevel = Parts.Level;
+
+		//Calculation Start
+		let arcs = [],
+			FPRewards = [], // FP Maezenboni pro Platz (0 basiertes Array)
+			MedalRewards = [], // Medaillen Maezenboni pro Platz (0 basiertes Array)
+			BPRewards = [], // Blaupause Maezenboni pro Platz (0 basiertes Array)
+			h = [],
+			EigenStart = 0, // Bereits eingezahlter Eigenanteil (wird ausgelesen)
+			Eigens = [], // Feld aller Eigeneinzahlungen pro Platz (0 basiertes Array)
+			MaezenTotal = 0, // Summe aller Fremdeinzahlungen
+			EigenTotal, // Summe aller Eigenanteile
+			ExtTotal = 0, // Summe aller Externen Einzahlungen
+			EigenCounter = 0, // Eigenanteile Counter während Tabellenerstellung
+			Rest = Total, // Verbleibende FP: Counter während Berechnung
+			AlreadyPaid = 0, // paid FP (other players GBs)
+			SelfPlace = -1; // own position, -1 if not in the top 5
+
+		Parts.PlaceAvailables = Array(Parts.MaezenSlots).fill(false); // Wird auf true gesetz, wenn auf einem Platz noch eine (nicht externe) Zahlung einzuzahlen ist (wird in Spalte Einzahlen angezeigt)
+		Parts.DangerPlaces = Array(Parts.MaezenSlots).fill(0);; // Feld mit Dangerinformationen. Wenn > 0, dann die gefährdeten FP
+		Parts.LeveltLG = Array(Parts.MaezenSlots).fill(false);
+		Parts.Maezens = [];
+
+		if (Parts.IsPreviousLevel) {
+			Total = 0;
+			for (let i = 0; i < FH.Main.CurrentGB.Rankings.length; i++) {
+				let ToAdd = FH.Main.CurrentGB.Rankings[i]['forge_points'];
+				if (ToAdd !== undefined) Total += ToAdd;
+			}
+			Rest = Total;
+		}
+
+		if (Parts.Level === undefined) {
+			Parts.Level = 0;
+		}
+
+		for (let i = 0; i < Parts.MaezenSlots; i++) {
+			arcs[i] = ((parseFloat(Parts.ArcPercents[i]) + 100) / 100);
+		}
+
+		// Wenn in Rankings nichts mehr steht, dann abbrechen
+		if (! Parts.IsNextLevel) {
+			for (let i = 0; i < FH.Main.CurrentGB.Rankings.length; i++) {
+				// Owner
+				let CurrentMaezen = FH.Main.CurrentGB.Rankings[i]['forge_points'];
+				if (FH.Main.CurrentGB.Rankings[i]?.player?.is_self) {
+					AlreadyPaid = CurrentMaezen;
+				}
+				if (FH.Main.CurrentGB.Rankings[i]['player'] && FH.Main.CurrentGB.Rankings[i]['player']['player_id'] === FH.Main.CurrentGB.Entity['player_id']) {
+					EigenStart = CurrentMaezen;
+					Rest -= EigenStart;
+					continue;
+				}
+				// Deleted player
+				else if (FH.Main.CurrentGB.Rankings[i]['rank'] === undefined || FH.Main.CurrentGB.Rankings[i]['rank'] < 0) { //undefined => Eigentümer oder gelöscher Spieler P1-5, -1 => gelöschter Spieler ab P6 abwärts
+					Rest -= CurrentMaezen;
+					MaezenTotal += CurrentMaezen;
+					continue;
+				}
+
+				let Place = FH.Main.CurrentGB.Rankings[i]['rank'] - 1,
+					MedalCount = 0;
+
+				if (FH.Main.CurrentGB.Rankings[i]?.player?.is_self) {
+					SelfPlace = Place;
+				}
+
+				Parts.Maezens[Place] = CurrentMaezen;
+				if (Parts.Maezens[Place] === undefined) Parts.Maezens[Place] = 0;
+
+				if (Place < Parts.MaezenSlots) {
+					if (FH.Main.CurrentGB.Rankings[i]['reward'] !== undefined) {
+						let FPCount = (FH.Main.CurrentGB.Rankings[i]['reward']['strategy_point_amount'] !== undefined ? parseInt(FH.Main.CurrentGB.Rankings[i]['reward']['strategy_point_amount']) : 0);
+						if (FPCount > 0) {
+							FPRewards[Place] = FH.Main.round(FPCount * arcs[Place]);
+						}
+						else {
+							FPRewards[Place] = 1;
+						}
+						if (FPRewards[Place] === undefined) FPRewards[Place] = 0;
+
+						// Medals
+						MedalCount = (FH.Main.CurrentGB.Rankings[i]['reward']['resources'] !== undefined ? parseInt(FH.Main.CurrentGB.Rankings[i]['reward']['resources']['medals']) : 0);
+						MedalRewards[Place] = FH.Main.round(MedalCount * arcs[Place]);
+						if (MedalRewards[Place] === undefined) MedalRewards[Place] = 0;
+
+						// Blueprints
+						let BlueprintCount = (FH.Main.CurrentGB.Rankings[i]['reward']['blueprints'] !== undefined ? parseInt(FH.Main.CurrentGB.Rankings[i]['reward']['blueprints']) : 0);
+						if (FH.Main.CurrentGB.Rankings[i].reward.blueprintRewards?.length > 1) {
+							let last = FH.Main.CurrentGB.Rankings[i].reward.blueprintRewards.length - 1;
+							BlueprintCount = FH.Main.CurrentGB.Rankings[i].reward.blueprintRewards[last].amount;
+						}
+						BPRewards[Place] = FH.Main.round(BlueprintCount * arcs[Place]);
+						if (BPRewards[Place] === undefined) BPRewards[Place] = 0;
+					}
+					else {
+						FPRewards[Place] = 0;
+						MedalRewards[Place] = 0;
+						BPRewards[Place] = 0;
+					}
+				}
+			}
+
+			// Previous level and spot not taken? => Fill with zero
+			for (let i = Parts.Maezens.length; i < Parts.MaezenSlots; i++) {
+				Parts.Maezens[i] = 0;
+				FPRewards[i] = 0;
+				MedalRewards[i] = 0;
+				BPRewards[i] = 0;
+			}
+		}
+		else {
+			let P1 = GreatBuildings.Rewards[Era][Parts.Level];
+
+			Parts.Maezens = Array(Parts.MaezenSlots).fill(0);
+			FPRewards = GreatBuildings.GetMaezen(P1, Parts.ArcPercents)
+			MedalRewards = Array(Parts.MaezenSlots).fill(0);
+			BPRewards = Array(Parts.MaezenSlots).fill(0);
+		}
+
+		for (let i = 0; i < Parts.Exts.length; i++) {
+			if (Parts.Exts[i] > 0) {
+				Parts.Maezens[Parts.Maezens.length] = Parts.Exts[i];
+			}
+		}
+
+		Parts.Maezens.sort(function (a, b) { return b - a });
+
+		for (let i = 0; i < Parts.Maezens.length; i++) {
+			if(Parts.Maezens[i] === 0) {
+				Parts.Maezens.length = Math.max(i, Parts.MaezenSlots);
+				break;
+			}
+
+			ExtTotal += Parts.Maezens[i];
+		}
+
+		Rest -= ExtTotal;
+
+		for (let i = 0; i < Parts.MaezenSlots; i++) {
+			if (FPRewards[i] <= Parts.Maezens[i] || Rest <= Parts.Maezens[i]) {
+				if (Parts.LockExistingPlaces) { // Bestehende Einzahlung absichern
+					let NextMaezen = Parts.Maezens[i + 1] !== undefined ? Parts.Maezens[i + 1] : 0;
+					Eigens[i] = Math.ceil(Rest + (Parts.TrustExistingPlaces ? 0 : NextMaezen) - Parts.Maezens[i]);
+					Eigens[i] = Math.max(Eigens[i], 0);
+					Rest -= Eigens[i];
+				}
+				else {
+					Eigens[i] = 0;
+				}
+				continue;
+			}
+
+			Eigens[i] = Math.ceil(Rest + (Parts.TrustExistingPlaces ? 0 : Parts.Maezens[i]) - 2 * FPRewards[i]);
+			if (Eigens[i] < 0) {
+				if (Parts.TrustExistingPlaces) Eigens[i] = (Math.min(Eigens[i] + Parts.Maezens[i], 0));
+				Parts.DangerPlaces[i] = Math.floor(0 - Eigens[i]/2);
+				Eigens[i] = 0;
+			}
+
+			for (let j = Parts.Maezens.length - 1; j >= i; j--) {
+				if (Parts.Maezens[j] > 0) {
+					Parts.Maezens[j + 1] = Parts.Maezens[j];
+				}
+			}
+			Parts.Maezens[i] = FPRewards[i];
+			if (Parts.Maezens[i] >= Rest) {
+				Parts.LeveltLG[i] = true;
+				if (Parts.DangerPlaces[i] > 0)
+					Parts.DangerPlaces[i] -= Parts.Maezens[i] - Rest;
+				Parts.Maezens[i] = Rest;
+			}
+			// hier weiter mit besserem gehirn
+			if (i !== Parts.LockedMaezens.find(x => x == i)) 
+				Parts.PlaceAvailables[i] = true;
+			
+			MaezenTotal += Parts.Maezens[i];
+			Rest -= Eigens[i] + Parts.Maezens[i];
+		}
+
+		if(Rest>0) Eigens[Parts.MaezenSlots] = Rest;
+
+		EigenTotal = EigenStart;
+		for (let i = 0; i < Eigens.length; i++) {
+			EigenTotal += Eigens[i];
+		}
+
+		for (let i = FPRewards.length; i < Parts.Maezens; i++)
+			FPRewards[i] = 0;
+
+		for (let i = MedalRewards.length; i < Parts.Maezens; i++)
+			MedalRewards[i] = 0;
+
+		for (let i = BPRewards.length; i < Parts.Maezens; i++)
+			BPRewards[i] = 0;
+
+		let PlayerName = undefined;
+		if (PlayerID === FH.Player.ID) {
+			PlayerName = FH.Player.Name
+		}
+		else { //LG eines anderen Spielers
+			PlayerName = FH.Players.Dict[PlayerID]['PlayerName'];
+		}
+		
+		for (let i = 0; i < Parts.MaezenSlots; i++) {
+			Parts.CurrentMaezens[i] = Parts.Maezens[i] | 0;
+		}
+		Parts.RemainingOwnPart = EigenTotal - EigenStart;
+
+		Parts.SafePlaces = [];
+		for (let i = 0; i < Parts.MaezenSlots; i++) {
+			if (Eigens[i] > 0) break;
+				
+			if (Parts.PlaceAvailables[i]) 
+				Parts.SafePlaces.push(i);
+		}
+		
+        // Level is locked
+		if (PlayerID === FH.Player.ID && FH.Main.CityMapData[FH.Main.CurrentGB.Entity.id]?.level === FH.Main.CityMapData[FH.Main.CurrentGB.Entity.id]?.max_level) {
+			h.push('<div class="lg-not-possible" data-text="'+FH.t('Boxes.Calculator.LGNotOpen')+'"></div>');
+		}
+
+		let Tier = FH.Main.CurrentGB.Entity.tier;
+		let haslevelingData = FH.Main.CurrentGB.Entity.bonuses.length === 0 ? '' : 'disabled'; // disables some buttons
+
+		h.push(`<div id="gbCosts" class="gbTier-${Tier}">`);
+
+		h.push(`<div class="dark-bg header text-center p5">
+			<div class="flex gap" style="justify-content:space-between;align-items:center;margin-bottom:5px;">
+			${PlayerID === FH.Player.ID ? 
+				'<a class="player-portrait" href="'+FH.Main.GetPlayerLinkURL(PlayerID)+'" target="_blank"><img height="30" src="'+srcLinks.GetPortrait(FH.Player.Avatar)+'" /><svg xmlns="http://www.w3.org/2000/svg" width="22pt" height="22pt" viewBox="0 0 22 22"><g><path id="fham-external-link-icon" d="M 13 0 L 13 2 L 18.5625 2 L 6.28125 14.28125 L 7.722656 15.722656 L 20 3.4375 L 20 9 L 22 9 L 22 0 Z M 0 4 L 0 22 L 18 22 L 18 9 L 16 11 L 16 20 L 2 20 L 2 6 L 11 6 L 13 4 Z M 0 4 "></path></g></svg></a>' : ``
+			}
+			<div class="lb-info">
+			<h1>${CityEntity['name']}</h1>`);
+
+			h.push(`<div class="gbLevels">`);
+			if (Parts.IsPreviousLevel) {
+				let Level = GreatBuildings.GetLevel(EntityID, Total);
+				if (Level) 
+					h.push((Level-1) + ' &rarr; ' + (Level));
+				else // Level unknown
+					h.push(FH.t('Boxes.OwnpartCalculator.OldLevel'));
+			}
+			else {
+				if (Parts.IsNextLevel) 
+					h.push(`<button class="btn btn-set-level" data-value="${(Parts.Level - 1)}">&#9204;</button> `);
+
+				h.push(Parts.Level + ' &rarr; ' + (parseInt(Parts.Level) + 1));
+
+				if (GreatBuildings.Rewards[Era] && GreatBuildings.Rewards[Era][Parts.Level + 1]) 
+					h.push(` <button class="btn btn-set-level ${(haslevelingData)}" data-value="${(Parts.Level + 1)}">&#9205;</button>`);
+			}
+			h.push('</div>');
+
+			if (PlayerName) {
+				h.push(`<span class="player-name ${PlayerID === FH.Player.ID ? 'isSelf' : ''}">
+				<span class="activity activity_${FH.Players.Dict[PlayerID]['Activity']}"></span> ${FH.Main.GetPlayerLink(PlayerID, PlayerName)}`);
+
+				if (FH.Players.Dict[PlayerID].ClanName !== undefined) {
+					h.push(`<br> <span class="text-smaller">${FH.Main.GetGuildLink(FH.Players.Dict[PlayerID].ClanId, FH.Players.Dict[PlayerID].ClanName)}</span>`);
+				}
+				h.push(`</span>`);
+			}
+		h.push(`</div></div>`)
+
+		h.push('<span class="btn-group">');
+		// different arc bonus-buttons
+		let investmentSteps = Tier === 'gold' ? [10, 20, Boosts.Sums.contribution_boost_gold] : [80, 90, 100, Boosts.Sums.contribution_boost],
+			customButtons = Tier === 'gold' ? FH.Storage.getItem('CustomPartCalcGoldButtons') : FH.Storage.getItem('CustomPartCalcButtons');
+
+		// custom buttons available
+		if(customButtons) {
+			investmentSteps = [];
+			let bonuses = JSON.parse(customButtons);
+
+			bonuses.forEach(bonus => {
+				if(bonus === 'contribution_boost_gold' || bonus === 'contribution_boost' || bonus === 'ark') 
+					investmentSteps.push(FH.Main.ArkBonus);
+				else 
+					investmentSteps.push(bonus);
+			});
+		}
+
+		investmentSteps = investmentSteps.filter((item, index) => investmentSteps.indexOf(item) === index);
+		investmentSteps.sort((a, b) => a - b);
+		investmentSteps.forEach(bonus => {
+			h.push(`<button class="btn btn-mid btn-set-arc${(Parts.ArcPercents[0] === bonus ? ' btn-active' : '')}" data-value="${bonus}">${bonus}%</button>`);
+		});
+
+		h.push('</span>');
+		h.push('</div>');
+		
+		let medalsEnabled = (FH.Storage.getItem('OwnPartShowMedals') ?? 'true') === 'true';
+		let printsEnabled = (FH.Storage.getItem('OwnPartShowBP') ?? 'true') === 'true';
+		let minView = (FH.Storage.getItem('OwnPartMinView') ?? 'false') === 'true';
+
+		h.push(`<table id="OwnPartTable" class="foe-table text-smaller slim">
+			<thead>
+			<tr>
+				<th class="text-smaller">${FH.t('Boxes.OwnpartCalculator.Order')}</th>
+				<th class="text-center"><span class="forgepoints" title="${FH.HTML.Tooltip(FH.t('Boxes.OwnpartCalculator.Deposit'))}"></th>
+				<th class="text-center"><span class="forgepointsDone" title="${FH.t('Boxes.OwnpartCalculator.Done')}"></span></th>`);
+					if (printsEnabled) h.push(`<th class="text-center"><span class="blueprint" title="${FH.HTML.Tooltip(FH.t('Boxes.OwnpartCalculator.BPs'))}"></span></th>`);
+					if (medalsEnabled) h.push(`<th class="text-center"><span class="medal" title="${FH.HTML.Tooltip(FH.t('Boxes.OwnpartCalculator.Meds'))}"></span></th>`);
+					if (!minView) h.push(`<th class="text-center"><span class="forgepoints" title="${FH.t('Boxes.OwnpartCalculator.Ext')}"></span></th>`);
+					if (!minView) h.push(`<th class="text-center"><span class="arcBonus" title="${FH.t('Boxes.OwnpartCalculator.Arc')}"></span></th>`);
+			h.push(`</tr>
+			</thead>
+			
+			<tbody>`);
+		let IncludeStart = FH.Storage.getItem('OwnPartIncludeStart') != 'false';
+		let opt = (platz, gesamt)=>{
+			let ret = `<strong class="${PlayerID==FH.Player.ID ? "copy-fp clickable":""}" data-copy="${platz}">${FH.HTML.Format(platz)}</strong>`;
+			if (gesamt > platz) {
+				ret += ` <small class="${IncludeStart || PlayerID!=FH.Player.ID ? "":"copy-fp clickable"}" data-copy="${gesamt}">(=${FH.HTML.Format(gesamt)})</small>`;
+			}
+			return ret;
+		}
+
+		for (let i = 0; i < Parts.MaezenSlots; i++) {
+			EigenCounter += Eigens[i];
+
+			// owner contributions
+			if (i === 0 && EigenStart > 0) {
+				if (IncludeStart) EigenCounter += EigenStart;
+				h.push('<tr>');
+				let OwnPartStartText = (Eigens[i] > 0 ? opt(Eigens[i], EigenCounter): '-');
+				h.push('<td class="text-smaller">' + FH.t('Boxes.OwnpartCalculator.OwnPart') + '</td>');
+				h.push('<td class="text-center ' + (PlayerID === FH.Player.ID ? 'success' : 'highlighted-text') + '"><span class="' + (PlayerID === FH.Player.ID ? 'success' : '') + '">' + OwnPartStartText + '</span></td>');
+				h.push('<td class="text-center paidFP"><b>' + FH.HTML.Format(EigenStart) + '</b></td>');
+				let restColspan = 0 + (printsEnabled ? 1 : 0) + (medalsEnabled ? 1 : 0) + (!minView ? 2 : 0);
+				if (restColspan > 0)
+					h.push('<td colspan="' + restColspan + '"></td>');
+				h.push('</tr>');
+			}
+			else {
+				if (Eigens[i] > 0) {
+					h.push('<tr>');
+					let OwnPartText = opt(Eigens[i], EigenCounter);
+					h.push('<td class="text-smaller">' + FH.t('Boxes.OwnpartCalculator.OwnPart') + '</td>');
+					h.push('<td class="text-center ' + (PlayerID === FH.Player.ID ? 'success' : 'highlighted-text') + '">' + OwnPartText + '</td>');
+					let restColspan = 1 + (printsEnabled ? 1 : 0) + (medalsEnabled ? 1 : 0) + (!minView ? 2 : 0);
+					h.push('<td colspan="' + restColspan + '"></td>');
+					h.push('</tr>');
+				}
+			}
+
+			// other players contributions
+			let ownSpot = (SelfPlace === i && FH.Main.CurrentGB.Entity?.player_id !== FH.Player.ID);
+			h.push(`<tr ${ownSpot? `class="bg-blue"` : ``}>
+				<td ${Parts.PlaceAvailables[i] ? `class="notTaken" onClick="Parts.reRank(${i})"` : ''}><b>` + (i+1) + '</b></td>');
+
+			if (Parts.PlaceAvailables[i]) {
+				let copyvalue = Parts.Maezens[i];
+				if (AlreadyPaid && PlayerID !== FH.Player.ID)
+					copyvalue = Math.max(Parts.Maezens[i]-AlreadyPaid, 0);
+
+				h.push('<td class="text-center">' + 
+					'<strong class="' + (PlayerID === FH.Player.ID ? '' : 'success' + (Parts.Maezens[i] > 0 ? ' copy-fp clickable' : '')) + '" ' + 
+						'data-copy="' + (copyvalue > 0 ? copyvalue : '') + '">' + 
+							(Parts.Maezens[i] > 0 ? FH.HTML.Format(Parts.Maezens[i]) : '-') + 
+						'</strong >' + 
+					'</td>');
+				
+				if (Parts.LeveltLG[i]) {
+					h.push(`<td class="text-center"><strong class="error">${FH.t("Boxes.OwnpartCalculator.levelt")}</strong></td>`);
+				}
+				else if (Parts.DangerPlaces[i] > Parts.MaezenSlots) {
+					h.push(`<td class="text-center"><strong class="error">${FH.t("Boxes.OwnpartCalculator.danger")} (${FH.HTML.Format(Parts.DangerPlaces[i])}FP)</strong></td>`);
+				}
+				else {
+					h.push('<td class="text-center">-</td>');
+				}
+			}
+			else {
+				h.push('<td class="text-center">-</td>');
+				let MaezenString = Parts.Maezens[i] > 0 ? FH.HTML.Format(Parts.Maezens[i]) : '-';
+				let MaezenDiff = Parts.Maezens[i] - FPRewards[i];
+				let MaezenDiffString = '';
+				if (Parts.Maezens[i] > 0) {
+					if (MaezenDiff > 0) {
+						MaezenDiffString = ' <small class="success">(+' + FH.HTML.Format(MaezenDiff) + ')</small>';
+					}
+					else if (MaezenDiff < 0) {
+						MaezenDiffString = ' <small class="error">(' + FH.HTML.Format(MaezenDiff) + ')</small>';
+					}
+				}
+
+				h.push('<td class="text-center paidFP"><b>' + MaezenString + MaezenDiffString + '</b></td>');
+			}
+
+			if (printsEnabled) h.push('<td class="text-center">' + FH.HTML.Format(BPRewards[i]) + '</td>');
+			if (medalsEnabled) h.push('<td class="text-center">' + FH.HTML.Format(MedalRewards[i]) + '</td>');
+			if (!minView) h.push('<td class="text-center"><input min="0" step="1" type="number" class="ext-part-input' + i + '" value="' + Parts.Exts[i] + '"></td>');
+			if (!minView) h.push('<td class="text-center"><input type="number" class="arc-percent-input" step="0.1" min="12" max="200" value="' + Parts.ArcPercents[i] + '"></td>');
+
+			h.push('</tr>');
+		}
+
+		let MaezenRest = 0;
+		for (let i = Parts.MaezenSlots; i < Parts.Maezens.length; i++) {
+			MaezenRest += Parts.Maezens[i];
+		}
+
+		// any contribution over last place
+		if (MaezenRest > 0) {
+			h.push('<tr>');
+			h.push('<td class="text-smaller">#6' + (Parts.Maezens.length > 6 ? ('-' + Parts.Maezens.length) : '') + '</td>');
+			h.push('<td class="text-center">-</td>');
+			h.push('<td class="text-center"><strong class="info">' + FH.HTML.Format(MaezenRest) + '</strong></td>');
+			if (!minView) h.push('<td colspan="4"></td>');
+			h.push('</tr>');
+		}
+
+		// rest to pay for the owner
+		if (Eigens[Parts.MaezenSlots] > 0) {
+			EigenCounter += Eigens[Parts.MaezenSlots];
+			h.push('<tr>');
+			let OwnPartRestText = opt(Eigens[Parts.MaezenSlots], EigenCounter);
+			h.push('<td class="text-smaller">' + FH.t('Boxes.OwnpartCalculator.OwnPart') + '</td>');
+			h.push('<td class="text-center ' + (PlayerID === FH.Player.ID ? 'success' : 'highlighted-text') + '">' + OwnPartRestText + '</td>');
+			let restColspan = 1 + (printsEnabled ? 1 : 0) + (medalsEnabled ? 1 : 0) + (!minView ? 2 : 0);
+			h.push('<td colspan="' + restColspan + '"></td>');
+			h.push('</tr>');
+		}
+
+		h.push('</tbody>');
+		h.push('</table>');
+
+		
+		h.push('<div class="dark-bg text-smaller2" style="padding: 0 5px 5px">');
+
+		h.push(`<div class="text-center">
+			${FH.t('Boxes.OwnpartCalculator.ExistingPayments')}: 
+			<label for="lockexistingpayments"><input id="lockexistingpayments" class="lockexistingpayments game-cursor" ${(Parts.LockExistingPlaces ? 'checked' : '')} type="checkbox">${FH.t('Boxes.OwnpartCalculator.Lock')}</label>
+			<label for="trustexistingpayments"><input id="trustexistingpayments" class="trustexistingpayments game-cursor" ${(Parts.TrustExistingPlaces ? 'checked' : '')} type="checkbox"> ${FH.t('Boxes.OwnpartCalculator.Trust')}</label>
+			</div>
+			
+			<div class="flex between" style="padding:3px 0;">
+				<div>
+					${FH.t('Boxes.OwnpartCalculator.PatronPart')}: <strong class="${(PlayerID === FH.Player.ID ? '' : 'success')}">${FH.HTML.Format(MaezenTotal + ExtTotal)}</strong>
+				</div>
+				<div class="text-right">
+				${FH.t('Boxes.OwnpartCalculator.OwnPart')}: `);
+				if (EigenStart > 0)
+					h.push(`<strong title="${FH.t('Boxes.OwnpartCalculator.OwnPartRemaining')}" data-copy="${(EigenTotal - EigenStart)}" class="clickable copy-fp ${(PlayerID === FH.Player.ID ? 'success' : '')}">${FH.HTML.Format(EigenTotal - EigenStart)}</strong> / `);
+				h.push(`<strong data-copy="${(EigenTotal)}" class="clickable copy-fp ${(PlayerID === FH.Player.ID ? 'success' : '')}">${FH.HTML.Format(EigenTotal)}</strong>
+			</div>
+			</div>`);
+
+		Parts.CalcBackgroundBody();
+
+		// How much is still needed to level up?
+		if (Parts.IsPreviousLevel === false) {
+			let rest;
+			if (Parts.IsNextLevel) 
+				rest = Total;
+			else 
+				rest = FH.Main.CurrentGB.Entity['state']['forge_points_for_level_up'] - FH.Main.CurrentGB.Rankings.reduce((acc,entry)=>acc+(entry?.forge_points|0),0);
+			
+			h.push(`<div class="text-center d-flex">
+				<em>${FH.t('Boxes.OwnpartCalculator.LGTotalFP')}: `);
+				if (rest !== Total)
+					h.push(`<span id="up-to-level-up" class="copy-fp clickable" data-copy="${rest}" title="${FH.t('Boxes.Calculator.Up2LevelUp')}"> ${FH.HTML.Format(rest)}</span> / `);
+				h.push(`<span class="highlighted-text">${FH.HTML.Format(Total)}</span></em>
+			</div>`);
+
+			// nur zeigen wenn relevant
+			h.push(Calculator.GetRecurringQuestsLine(Parts.PlayInfoSound));
+			
+			h.push('<div class="bottom-buttons text-center">');
+			h.push('<div class="flex">');
+			h.push('<span id="OwnPartCalcGBSettings" class="fh-icon-settings"></span>'); 
+			h.push('<div class="btn-group">');
+			if (Parts.SafePlaces.length > 0 || Parts.CopyModeAll) { //Copy bzw. Note Button nur einblenden wenn zumindest ein Platz safe ist
+				h.push('<span class="btn btn-slim button-own">' + FH.t('Boxes.OwnpartCalculator.CopyValues') + '</span>');
+				if (FH.Main.CurrentGB.Entity['player_id'] === FH.Player.ID) h.push('<span class="btn btn-slim button-save-own">' + FH.t('Boxes.OwnpartCalculator.Note') + '</span>');
+			}
+			else {
+				h.push(FH.t('Boxes.OwnpartCalculator.NoPlaceSafe'));
+			}
+			h.push('</div></div>');
+
+			h.push(`<div class="btn-group">
+				<span class="btn btn-slim button-powerleveling ${haslevelingData}">${FH.t('Boxes.OwnpartCalculator.PowerLeveling')}</span>
+				</div>`);
+			h.push('</div>');
+			h.push('</div>');
+			h.push('</div>');
+
+			let SaveCopyLength = Object.keys(Parts.CopyStrings).length;
+			if (SaveCopyLength > 0) {
+				let GBList = "",
+					Keys = Object.keys(Parts.CopyStrings);
+
+				for (let i = 0; i < Keys.length; i++) {
+					GBList += FH.Main.CityEntities[Keys[i]]['name'];
+					if (i < Keys.length - 1) GBList += ', ';
+				}
+				
+				h.push('<div class="text-center dark-bg d-flex" style="padding:5px 0;"><em style="max-width:350px"><strong>' + FH.helper.str.Replacer(FH.t('Boxes.OwnpartCalculator.GBsNoted'), { 'GBCount': SaveCopyLength }) + ':</strong> ' + GBList + '</em></div>');
+			}
+		}
+
+		$('#OwnPartBoxBody').html(h.join(''));
+
+		if ($('#PowerLevelingBox').length > 0 && !Parts.IsPreviousLevel) {
+			Parts.CalcBodyPowerLeveling();
+		}
+	},
+
+
+	SwitchCalculator: () => {
+		if ($('#gbCosts').length > 0 && FH.Main.CurrentGB.Entity.player_id !== FH.Player.ID) { // is PartCalc, so show the other one
+			$('#OwnPartBox .window-viewswitch').removeClass('inactive');
+			Parts.View = 'calculator';
+			Parts.CalcBody();
+			return;
+		}
+		else if ($('#gbCosts').length > 0 && FH.Main.CurrentGB.Entity.player_id === FH.Player.ID) {
+			$('#OwnPartBox .window-viewswitch').addClass('inactive');
+		}
+		Parts.View = 'partcalc';
+		Parts.CalcBody();
+	},
+
+	reRank: (n) => {
+		Parts.LockedMaezens.push(n);
+		Parts.CalcBody();
+	},
+
+
+	/**
+	 * Data for the Copy buttons
+	 */
+	CalcBackgroundBody: () => {
+		let h = [],
+			$OwnPartBox = $('#OwnPartBox'),
+			EntityID = FH.Main.CurrentGB.Entity['cityentity_id'];
+		let SavedBuildingName = FH.Storage.getItem(Parts.GetStorageKey('CopyGBName', FH.Main.CurrentGB.Entity['cityentity_id']));
+		$OwnPartBox.find('.OwnPartBoxBackgroundBody').remove();
+
+		let isOpen = false;
+		if($('#OwnPartBox').hasClass('gbSettingsOpen')) 
+			isOpen = true;
+
+		if (SavedBuildingName !== null) {
+			Parts.CopyBuildingName = SavedBuildingName;
+		}
+		else {
+			Parts.CopyBuildingName = FH.Main.CityEntities[EntityID]['name'];
+		}
+
+		if (FH.Storage.getItem(Parts.GetStorageKey('CopyFormatPerGB', null)) === 'true') {
+			let gbID = FH.Main.CurrentGB.Entity['cityentity_id'];
+			let ls = key => FH.Storage.getItem(Parts.GetStorageKey(key, gbID));
+
+			Parts.CopySettings.includeDanger = (ls('CopyIncludeDanger') ?? 'false') === 'true';
+			Parts.CopySettings.includePlayer = (ls('CopyIncludePlayer') ?? 'true') === 'true';
+			Parts.CopySettings.includeGB = (ls('CopyIncludeGB') ?? 'true') === 'true';
+			Parts.CopySettings.includeLevel = (ls('CopyIncludeLevel') ?? 'true') === 'true';
+			Parts.CopySettings.includeFP = (ls('CopyIncludeFP') ?? 'true') === 'true';
+			Parts.CopySettings.includeOwnPart = (ls('CopyIncludeOwnPart') ?? 'false') === 'true';
+			Parts.CopyPreP = (ls('CopyPreP') ?? 'true') === 'true';
+			Parts.CopySettings.descending = (ls('CopyDescending') ?? 'true') === 'true';
+			Parts.CopySettings.dangerPrefix = ls('CopyDangerPrefix') ?? '!!!';
+			Parts.CopySettings.dangerSuffix = ls('CopyDangerSuffix') ?? '';
+		}
+
+		if (Parts.CopyModeAll) {
+			for (let i = 0; i < Parts.MaezenSlots; i++) {
+				Parts.CopyPlaces[i] = true;
+			}
+		}
+		else if (Parts.CopyModeAuto) {
+			for (let i = 0; i < Parts.MaezenSlots; i++) {
+				Parts.CopyPlaces[i] = (Parts.SafePlaces.includes(i));
+			}
+		}
+		else if (Parts.CopyModeAutoUnsafe) {
+			for (let i = 0; i < Parts.MaezenSlots; i++) {
+				Parts.CopyPlaces[i] = (Parts.PlaceAvailables[i]);
+			}
+		}
+
+		let PlayerID = FH.Main.CurrentGB.Entity['player_id'];
+
+		Parts.CopyPlayerName = (PlayerID === FH.Player.ID ? Parts.CopyOwnPlayerName : FH.Players.Dict[PlayerID]['PlayerName']);
+
+		h.push('<span class="icon-close"></span>');
+		h.push('<section class="p5">');
+		h.push('<strong>' + FH.t('Boxes.OwnpartCalculator.Preview') + '</strong><br>');
+		Parts.CopyString = Parts.GetCopyString();
+		h.push('<input type="text" id="copystring" value="' + Parts.CopyString + '">');
+		
+		h.push('</section>');
+
+		h.push('<section class="p2">');
+		if (PlayerID === FH.Player.ID) {
+			h.push('<div class="flex between"><span>' + FH.t('Boxes.OwnpartCalculator.PlayerName') + ':</span><input type="text" id="player-name" value="' + Parts.CopyPlayerName + '"></div>');
+		}
+		else {
+			h.push('<div><span>' + FH.t('Boxes.OwnpartCalculator.PlayerName') + ':</span>' + Parts.CopyPlayerName + '</div>');
+		}
+		h.push('<div class="flex between"><span>' + FH.t('Boxes.OwnpartCalculator.BuildingName') + ':</span><input type="text" id="build-name" value="' + (Parts.CopyBuildingName) + '"></div>');
+		h.push('</section>');
+
+		h.push('<section class="p2">');
+		h.push('<strong>' + FH.t('Boxes.OwnpartCalculator.IncludeData') + '</strong>');
+		let Options = '<div class="checkboxes">' +
+			'<label class="form-check-label game-cursor" for="options-player"><input type="checkbox" class="form-check-input" id="options-player" data-options="player" ' + (Parts.CopySettings.includePlayer ? 'checked' : '') + '> <span>' + FH.t('Boxes.OwnpartCalculator.OptionsPlayer') + '</span></label>' +
+			'<label class="form-check-label game-cursor" for="options-gb"><input type="checkbox" class="form-check-input" id="options-gb" data-options="gb" ' + (Parts.CopySettings.includeGB ? 'checked' : '') + '> <span>' + FH.t('Boxes.OwnpartCalculator.OptionsGB') + '</span></label>' +
+			'<label class="form-check-label game-cursor" for="options-level"><input type="checkbox" class="form-check-input" id="options-level" data-options="level" ' + (Parts.CopySettings.includeLevel ? 'checked' : '') + '> <span>' + FH.t('Boxes.OwnpartCalculator.OptionsLevel') + '</span></label>' +
+			'<label class="form-check-label game-cursor" for="options-fp"><input type="checkbox" class="form-check-input" id="options-fp" data-options="fp" ' + (Parts.CopySettings.includeFP ? 'checked' : '') + '> <span>' + FH.t('Boxes.OwnpartCalculator.OptionsFP') + '</span></label>' +
+			'<label class="form-check-label game-cursor" for="options-descending"><input type="checkbox" class="form-check-input" id="options-descending" data-options="descending" ' + (Parts.CopySettings.descending ? 'checked' : '') + '> <span>' + FH.t('Boxes.OwnpartCalculator.OptionsDescending') + '</span></label>' +
+			'<label class="form-check-label game-cursor" for="options-levelup"><input type="checkbox" class="form-check-input" id="options-levelup" data-options="levelup" ' + (Parts.CopySettings.includeLevelString ? 'checked' : '') + '> <span>' + FH.t('Boxes.OwnpartCalculator.OptionsLevelUp') + '</span></label>' +
+			'<label class="form-check-label game-cursor" for="options-ownpart"><input type="checkbox" class="form-check-input" id="options-ownpart" data-options="ownpart" ' + (Parts.CopySettings.includeOwnPart ? 'checked' : '') + '> <span>' + FH.t('Boxes.OwnpartCalculator.OptionsOwnPart') + '</span></label>' +
+			'<label class="form-check-label game-cursor" for="options-prep"><input type="checkbox" class="form-check-input" id="options-prep" data-options="prep" ' + (Parts.CopyPreP ? 'checked' : '') + '> <span>P(xx)</span></label>' +
+			'<label class="form-check-label game-cursor" for="options-danger"><input type="checkbox" class="form-check-input" id="options-danger" data-options="danger" ' + (Parts.CopySettings.includeDanger ? 'checked' : '') + '> <span>' + FH.t('Boxes.OwnpartCalculator.OptionsDanger') + '</span></label>' +
+			'</div>';
+
+		h.push(Options)
+
+		if (Parts.CopySettings.includeDanger) {
+			let DangerOptions = '<strong>' + FH.t('Boxes.OwnpartCalculator.OptionsDanger') + '</strong>' +
+			'<div><span>' + FH.t('Boxes.OwnpartCalculator.OptionsDangerPrefix') + ':</span><input type="text" class="form-text-input" id="options-danger-prefix" data-options="danger-prefix" value="' + Parts.CopySettings.dangerPrefix + '"></div>' +
+			'<div><span>' + FH.t('Boxes.OwnpartCalculator.OptionsDangerSuffix') + ':</span><input type="text" class="form-text-input" id="options-danger-suffix" data-options="danger-suffix" value="' + Parts.CopySettings.dangerSuffix + '"></div>';
+
+			h.push(DangerOptions);
+		}
+		h.push('</section><section class="p2">');
+		h.push('<strong>' + FH.t('Boxes.OwnpartCalculator.Places') + '</strong>');
+
+		let cb = '<div class="checkboxes">';
+			for (let p = 1; p <= Parts.MaezenSlots; p++) {
+				cb += `<label class="form-check-label game-cursor" for="chain-p${p}"><input type="checkbox" class="form-check-input" id="chain-p${p}" data-place="${p}" ${Parts.CopyPlaces[p-1] ? 'checked' : ''}> <span>${p}</span></label>`;
+			}
+		cb += '<label class="form-check-label game-cursor" for="chain-all"><input type="checkbox" class="form-check-input" id="chain-all" data-place="all" ' + (Parts.CopyModeAll ? 'checked' : '') + '> <span>' + FH.t('Boxes.OwnpartCalculator.All') + '</span></label>' +
+			'<label class="form-check-label game-cursor" for="chain-auto"><input type="checkbox" class="form-check-input" id="chain-auto" data-place="auto" ' + (Parts.CopyModeAuto ? 'checked' : '') + '> <span>' + FH.t('Boxes.OwnpartCalculator.Auto') + '</span></label>' +
+			'<label class="form-check-label game-cursor" for="chain-auto-unsafe"><input type="checkbox" class="form-check-input" id="chain-auto-unsafe" data-place="auto-unsafe" ' + (Parts.CopyModeAutoUnsafe ? 'checked' : '') + '> <span>' + FH.t('Boxes.OwnpartCalculator.AutoWithUnsafe') + '</span></label>' +
+		'</div>';
+
+		h.push(cb);
+		h.push('</section>')
+		h.push('<div class="btn-outer text-center" style="margin-top: 10px">');
+		h.push('<span class="btn button-own">' + FH.t('Boxes.OwnpartCalculator.CopyValues') + '</span> ');
+		if (FH.Main.CurrentGB.Entity['player_id'] === FH.Player.ID) 
+			h.push('<span class="btn button-save-own">' + FH.t('Boxes.OwnpartCalculator.Note') + '</span>'); 
+		h.push('</div>');
+
+		$OwnPartBox.append( $('<div class="OwnPartBoxBackgroundBody settingsbox-wrapper" />').append(h.join('')) );
+		if (isOpen)
+			$('.OwnPartBoxBackgroundBody').show();
+	},
+
+
+	GetStorageKey: (SettingName, EntityID) => {
+		if (EntityID) {
+			return 'OwnPart_' + SettingName + '_' + EntityID + '_' + FH.Player.ID;
+		}
+		else {
+			return 'OwnPart_' + SettingName + '_' + FH.Player.ID;
+		}
+	},
+
+
+	GetConversationStorageKey: () => {
+		let Key = Parts.GetStorageKey('ArcPercents', null);
+		if (Parts.ArcPerConversation && FH.Main.OpenConversation) Key += '_' + FH.Main.OpenConversation.id;
+		return Key;
+	},
+
+
+	GetArcBoost: () => {
+		return FH.Main.CurrentGB.Entity?.tier === 'gold' ? Boosts.Sums.contribution_boost_gold : Boosts.Sums.contribution_boost;
+	},
+
+
+	GetConversationBonus: () => {
+		let Saved = null;
+		if (Parts.ArcPerConversation && FH.Main.OpenConversation) Saved = FH.Storage.getItem(Parts.GetConversationStorageKey());
+		if (Saved === null) Saved = FH.Storage.getItem(Parts.GetStorageKey('ArcPercents', null));
+		if (Saved !== null) Parts.ArcPercents = JSON.parse(Saved);
+		while (Parts.ArcPercents.length < Parts.MaezenSlots) Parts.ArcPercents.push(Parts.ArcPercents[0] ?? 90);
+
+		Parts.LastArcConversationID = FH.Main.OpenConversation?.id ?? null;
+	},
+
+
+	GetCopyString: () => {
+		return Parts.GetCopyStringEx(Places=Parts.CopyPlaces, Maezens=Parts.Maezens, Level=Parts.Level, OwnPart=Parts.RemainingOwnPart, PlaceAll=Parts.CopyModeAll, PlaceAuto=Parts.CopyModeAuto, PlaceAutoUnsafe=Parts.CopyModeAutoUnsafe, DangerPlaces=Parts.DangerPlaces, LeveltLG=Parts.LeveltLG)
+	},
+
+
+	GetCopyStringEx: (Places, Maezens, Level, OwnPart, PlaceAll, PlaceAuto, PlaceAutoUnsafe, DangerPlaces, LeveltLG) => {	
+		let Ret = [];
+
+		if (Parts.CopySettings.includeDanger && Parts.CopySettings.dangerPrefix !== '' && (DangerPlaces.find(e => e > Parts.MaezenSlots) || LeveltLG.find(e => e))) Ret.push(Parts.CopySettings.dangerPrefix);
+
+		if (Parts.CopySettings.includePlayer) Ret.push(Parts.CopyPlayerName);
+
+		if (Parts.CopySettings.includeGB) Ret.push(Parts.CopyBuildingName);
+
+		if (Parts.CopySettings.includeLevelString) Ret.push(FH.t('Boxes.OwnpartCalculator.OptionsLevelUp'));
+
+		if (Parts.CopySettings.includeLevel) Ret.push(Level + '→' + (Level + 1));
+
+		let NoPlacesSelected = true;
+		for (let i = 0; i < Parts.MaezenSlots; i++) {
+			if (Places[i]) NoPlacesSelected = false;
+		}
+
+		if (!NoPlacesSelected) {
+			for (let i = 0; i < Parts.MaezenSlots; i++) {
+				let Place = (Parts.CopySettings.descending ? Parts.MaezenSlots - i - 1 : i);
+
+				if (!Places[Place]) continue;
+				if (PlaceAll && Maezens[Place] === 0) continue;
+				
+				if (Parts.CopySettings.includeFP) {
+					Ret.push((Parts.CopyPreP ? 'P' : '') + (Place + 1) + '(' + Maezens[Place] + ')');
+				}
+				else {
+					Ret.push((Parts.CopyPreP ? 'P' : '') + (Place + 1));
+				}
+
+				if (Parts.CopySettings.includeDanger && Parts.CopySettings.dangerSuffix !== '' && (DangerPlaces[Place] > Parts.MaezenSlots || LeveltLG[Place])) Ret.push(Parts.CopySettings.dangerSuffix);
+			}
+		}
+		else if (PlaceAuto) {
+			Ret.push(FH.t('Boxes.OwnpartCalculator.NoPlaceSafe'));
+		}
+		else if (PlaceAutoUnsafe) {
+			Ret.push(FH.t('Boxes.OwnpartCalculator.NoPlaceAvailable'));
+		}
+		
+		if (Parts.CopySettings.includeOwnPart) Ret.push(FH.t('Boxes.OwnpartCalculator.OwnPartShort') + '(' + OwnPart + ')');
+
+		return Ret.join(' ');
+	},
+
+
+	/**
+	 * Note or copy
+	 */
+	CopyFunction: (Event, Action) => {
+		let CopyString = $('#copystring').val();
+	
+		$(Event).removeClass('btn-green');
+
+		$('.OwnPartBoxBackgroundBody').fadeToggle();
+		$('#OwnPartBox').toggleClass('gbSettingsOpen');
+
+		Parts.CopyStrings[FH.Main.CurrentGB.Entity['cityentity_id']] = CopyString;
+
+		let Copy = "";
+		let Keys = Object.keys(Parts.CopyStrings);
+		for (let i = 0; i < Keys.length; i++) {
+			let Key = Keys[i];
+			Copy += Parts.CopyStrings[Key];
+			if (i < Keys.length) Copy += '\n';
+		}
+
+		if (Action === 'copy') {
+			Parts.CopyStrings = {}; // delete list
+		}
+
+		return Copy;
+	},
+
+
+	ShowPowerLeveling: (event) => {
+		Parts.BuildBoxPowerLeveling(event);
+	},
+
+
+	BuildBoxPowerLeveling: (event) => {
+		if ($('#PowerLevelingBox').length === 0) {
+			FH.HTML.Box({
+				'id': 'PowerLevelingBox',
+				'title': FH.t('Boxes.PowerLeveling.Title'),
+				'auto_close': true,
+				'dragdrop': true,
+				'minimize': true,
+			    active_maps:"main",
+			});
+
+			const box = $('#PowerLevelingBox');
+
+			// Events on the `startLevel` input field
+			box.on('blur', '#startLevel', function () {
+				Parts.PowerLevelingStartLevel = parseFloat($('#startLevel').val());
+				Parts.UpdateTableBodyPowerLeveling();
+			});
+			box.on('keydown', '#startLevel', function (e) {
+				const key = e.key;
+				const input = e.target;
+				if (key === "ArrowUp") {
+					Parts.PowerLevelingStartLevel = Number.parseInt(input.value) + 1;
+					Parts.UpdateTableBodyPowerLeveling();
+					e.preventDefault();
+				} else if (key === "ArrowDown") {
+					Parts.PowerLevelingStartLevel = Number.parseInt(input.value) - 1;
+					Parts.UpdateTableBodyPowerLeveling();
+					e.preventDefault();
+				} else if (key === "Enter") {
+					Parts.PowerLevelingStartLevel = Number.parseInt(input.value);
+					Parts.UpdateTableBodyPowerLeveling();
+				}
+			});
+
+			// Events on the `endLevel` input field
+			box.on('blur', '#endLevel', function () {
+				Parts.PowerLevelingEndLevel = parseFloat($('#endLevel').val());
+				Parts.UpdateTableBodyPowerLeveling();
+				//Parts.CalcBodyPowerLeveling();
+			});
+			box.on('keydown', '#endLevel', function (e) {
+				const key = e.key;
+				const input = e.target;
+				if (key === "ArrowUp") {
+					Parts.PowerLevelingEndLevel = Number.parseInt(input.value) + 1;
+					Parts.UpdateTableBodyPowerLeveling();
+					e.preventDefault();
+				} else if (key === "ArrowDown") {
+					Parts.PowerLevelingEndLevel = Number.parseInt(input.value) - 1;
+					Parts.UpdateTableBodyPowerLeveling();
+					e.preventDefault();
+				} else if (key === "Enter") {
+					Parts.PowerLevelingEndLevel = Number.parseInt(input.value);
+					Parts.UpdateTableBodyPowerLeveling();
+				}
+			});
+
+			// Event on the "Copy values" button in each row
+			box.on('click', '.button-powerlevel-copy', function () {
+				let gb_level = parseInt($(this).parent().find(".hidden-text").html());
+
+				let CopyParts = Parts.GetCopyStringEx(Places=[true, true, true, true, true], Maezens=Parts.PowerLevelingData.Places[gb_level], Level=gb_level, OwnPart=Parts.PowerLevelingData.EigenNettos[gb_level], PlaceAll=true, PlaceAuto=false, PlaceAutoUnsafe=false, DangerPlaces=[0, 0, 0, 0, 0], LeveltLG=[false, false, false, false, false]);
+				FH.helper.str.copyToClipboardLegacy(CopyParts);
+			});
+		}
+		else if (!event) {
+			FH.HTML.CloseOpenBox('PowerLevelingBox');
+			return;
+		}
+
+		Parts.CalcBodyPowerLeveling();
+	},
+
+
+	CalcBodyPowerLevelingData: () => {
+		let EntityID = FH.Main.CurrentGB.Entity['cityentity_id'],
+			CityEntity = FH.Main.CityEntities[EntityID],
+			EraName = GreatBuildings.GetEraName(EntityID),
+			Era = Technologies.Eras[EraName],
+			StartLevel = Parts.PowerLevelingStartLevel,
+			EndLevel = (GreatBuildings.Rewards[Era] ? Math.min(Parts.PowerLevelingEndLevel, GreatBuildings.Rewards[Era].length) : 0);
+
+		// Limit minimum value for the power leveling range
+		StartLevel = StartLevel < 0 ? 0 : StartLevel;
+		EndLevel = EndLevel <= 0 ? 1 : EndLevel;
+
+		// StartLevel must be a smaller number than EndLevel
+		StartLevel = StartLevel >= EndLevel ? EndLevel - 1 : StartLevel;
+
+		let Totals = [],
+			Places = [],			
+			EigenBruttos = [],
+			HasDoubleCollection = false,
+			DoubleCollections = [],
+			EigenNettos = [];
+
+		let OwnPartSum = 0;
+
+		for (let i = StartLevel; i < EndLevel; i++) {
+			// How many FPs are needed in total to level the GB
+			if (i < 10) {
+				Totals[i] = CityEntity['strategy_points_for_upgrade'][i];
+			}
+			else {
+				Totals[i] = Math.ceil(CityEntity['strategy_points_for_upgrade'][9] * Math.pow(1.025, i - 9));
+			}
+
+			// How many FPs are needed for each spot.
+			// For non-current levels, calculate the FPs for each spot...
+			if (i != Parts.Level) {
+				Places[i] = GreatBuildings.GetMaezen(GreatBuildings.Rewards[Era][i], Parts.ArcPercents)
+
+				EigenBruttos[i] = Totals[i] - Places[i][0] - Places[i][1] - Places[i][2] - Places[i][3] - Places[i][4]
+			}
+			// ...and for the current, it's already calculated
+			else {
+				Places[i] = Parts.CurrentMaezens;
+				
+				EigenBruttos[i] = Parts.RemainingOwnPart;
+			}
+			
+			let FPGreatBuilding = GreatBuildings.GreatBuildingsData.find(obj => (obj.ID === EntityID && obj.FPProductions));
+			if (FPGreatBuilding && !['X_FutureEra_Landmark1','X_AllAge_Expedition'].includes(EntityID)) { //FP produzierende LGs ohne Arche
+				HasDoubleCollection = true;
+				if (i < FPGreatBuilding.FPProductions.length) {
+					DoubleCollections[i] = FPGreatBuilding.FPProductions[i];
+				}
+				else {
+					DoubleCollections[i] = FH.Main.round(FPGreatBuilding.FPProductions[9] * (i + 1) / 10);
+				}
+			}
+			else {
+				HasDoubleCollection = false;
+				DoubleCollections[i] = 0;
+			}
+
+			EigenNettos[i] = EigenBruttos[i] - DoubleCollections[i];
+			OwnPartSum += EigenNettos[i];
+		}
+
+		return {
+			HasDoubleCollection,
+			Places,
+			CityEntity,
+			OwnPartSum,
+			StartLevel,
+			EndLevel,
+			EigenBruttos,
+			DoubleCollections,
+			EigenNettos
+		};
+	},
+
+
+	CalcTableBodyPowerLeveling: (h) => {
+		const {
+			HasDoubleCollection,
+			Places,
+			StartLevel,
+			EndLevel,
+			EigenBruttos,
+			DoubleCollections,
+			EigenNettos
+		} = Parts.PowerLevelingData;
+
+
+
+		for (let i = StartLevel; i < EndLevel; i++) {
+			h.push('<tr>');
+			h.push('<td class="bright" style="white-space:nowrap">' + i + ' → ' + (i + 1) + '</td>');
+			h.push('<td><span class="hidden-text"> - #1 (</span>' + FH.HTML.Format(Places[i][0]) + '<span class="hidden-text">)</span></td>');
+			h.push('<td class="text-light"><span class="hidden-text"> - #2 (</span>' + FH.HTML.Format(Places[i][1]) + '<span class="hidden-text">)</span></td>');
+			h.push('<td><span class="hidden-text"> - #3 (</span>' + FH.HTML.Format(Places[i][2]) + '<span class="hidden-text">)</span></td>');
+			h.push('<td class="text-light"><span class="hidden-text"> - #4 (</span>' + FH.HTML.Format(Places[i][3]) + '<span class="hidden-text">)</span></td>');
+			h.push('<td><span class="hidden-text"> - #5 (</span>' + FH.HTML.Format(Places[i][4]) + '<span class="hidden-text">)</span></td>');
+			if (HasDoubleCollection) {
+				h.push('<td class="success no-select"><strong>' + FH.HTML.Format(EigenBruttos[i]) + '</strong></td>');
+				h.push('<td class="no-select">' + FH.HTML.Format(FH.Main.round(DoubleCollections[i])) + '</td>');
+			}
+			h.push('<td><strong class="info no-select">' + FH.HTML.Format(FH.Main.round(EigenNettos[i])) + '</strong></td>');
+			h.push('<td><span class="hidden-text">' + i + '</span><span class="btn btn-slim button-powerlevel-copy">' + FH.t('Boxes.PowerLeveling.CopyValues') + '</span></td>');
+			h.push('</tr>');
+		}
+	},
+
+
+	UpdateTableBodyPowerLeveling: () => {
+		const tableBody = document.getElementById('PowerLevelingBoxTableBody');
+		if (tableBody) {
+			Parts.PowerLevelingData = Parts.CalcBodyPowerLevelingData();
+			/** @type {string[]} */
+			const h = [];
+			
+			Parts.CalcTableBodyPowerLeveling(h);
+
+			tableBody.innerHTML = h.join('');
+
+			// Startlevel
+			const startLevel = /** @type {FH.HTML.nputElement} */(document.getElementById('startLevel'));
+			if (startLevel.value != '' + Parts.PowerLevelingData.StartLevel) {
+				startLevel.value = '' + Parts.PowerLevelingData.StartLevel;
+			}
+			Parts.PowerLevelingStartLevel = Parts.PowerLevelingData.StartLevel;
+
+			// EndLevel
+			const endLevel = /** @type {FH.HTML.nputElement} */(document.getElementById('endLevel'));
+			if (endLevel.value != '' + Parts.PowerLevelingData.EndLevel) {
+				endLevel.value = '' + Parts.PowerLevelingData.EndLevel;
+			}
+			Parts.PowerLevelingEndLevel = Parts.PowerLevelingData.EndLevel;
+
+			const ownPartSum = /** @type {FH.HTML.lement} */(document.getElementById('PowerLevelingBoxOwnPartSum'));
+			ownPartSum.innerText = FH.HTML.Format(FH.Main.round(Parts.PowerLevelingData.OwnPartSum));
+		}
+	},
+
+
+	CalcBodyPowerLeveling: () => {
+		Parts.PowerLevelingData = Parts.CalcBodyPowerLevelingData();
+
+		const {
+			HasDoubleCollection,
+			CityEntity,
+			OwnPartSum,
+			StartLevel,
+			EndLevel,
+		} = Parts.PowerLevelingData;
+
+		let h = [];
+		h.push('<div class="dark-bg" style="margin-bottom:3px;padding: 5px;">');
+		h.push('<h1 class="text-center">' + CityEntity['name'] + '</h1>')
+
+		h.push('<div class="d-flex justify-content-center">');
+		h.push('<div style="margin: 5px 10px 0 0;">' + FH.t('Boxes.PowerLeveling.StartLevel') + ': <input type="number" id="startLevel" step="1" min=0" max="1000" value="' + StartLevel + '"></div>');
+		h.push('<div style="margin: 5px 10px 0 0;">' + FH.t('Boxes.PowerLeveling.EndLevel') + ': <input type="number" id="endLevel" step="1" min=10" max="1000" value="' + EndLevel + '"></div>');
+		h.push('<div>' + FH.t('Boxes.PowerLeveling.OwnPartSum') +': <strong class="info" id="PowerLevelingBoxOwnPartSum">'+ FH.HTML.Format(FH.Main.round(OwnPartSum)) + '</strong></div>')
+		h.push('</div>');
+		h.push('</div>');
+
+		h.push('<table class="foe-table">');
+
+		h.push('<thead class="sticky">');
+		h.push('<tr>');
+		h.push('<th>' + FH.t('Boxes.PowerLeveling.Level') + '</th>');
+		h.push('<th>' + FH.t('Boxes.PowerLeveling.P1') + '</th>');
+		h.push('<th>' + FH.t('Boxes.PowerLeveling.P2') + '</th>');
+		h.push('<th>' + FH.t('Boxes.PowerLeveling.P3') + '</th>');
+		h.push('<th>' + FH.t('Boxes.PowerLeveling.P4') + '</th>');
+		h.push('<th>' + FH.t('Boxes.PowerLeveling.P5') + '</th>');
+		if (HasDoubleCollection) {
+			h.push('<th class="no-select">' + FH.t('Boxes.PowerLeveling.OwnPartBrutto') + '</th>');
+			h.push('<th class="no-select">' + FH.t('Boxes.PowerLeveling.DoubleCollection') + '</th>');
+		}
+		h.push('<th class="no-select">' + FH.t('Boxes.PowerLeveling.OwnPartNetto') + '</th>');
+		h.push('<th></th>');
+		h.push('</tr>');
+		h.push('</thead>');
+
+		h.push('<tbody id="PowerLevelingBoxTableBody">');
+		Parts.CalcTableBodyPowerLeveling(h);
+		h.push('</tbody>');
+
+		h.push('</table>');
+
+		$('#PowerLevelingBoxBody').html(h.join(''));
+	},
+
+
+	ShowCalculatorSettings: ()=> {
+		// load other calculators settings if selected
+		let useThisCalculator = JSON.parse(FH.Storage.getItem('ShowOwnPartOnAllGBs'))
+		if (!useThisCalculator && FH.Main.CurrentGB.Entity.player_id !== FH.Player.ID) {
+			Calculator.ShowCalculatorSettings();
+			return;	
+		}
+
+		let c = [],
+			buttons, goldButtons,
+			defaults = Parts.DefaultButtons,
+			sB = FH.Storage.getItem('CustomPartCalcButtons'),
+			sBG = FH.Storage.getItem('CustomPartCalcGoldButtons'),
+			allGB = FH.Storage.getItem('ShowOwnPartOnAllGBs') || 'false',
+			showMedals = FH.Storage.getItem('OwnPartShowMedals') || 'true',
+			showPrints = FH.Storage.getItem('OwnPartShowBP') || 'true',
+			minView = FH.Storage.getItem('OwnPartMinView') || 'false',
+			autoOpen = FH.Storage.getItem('OwnPartAutoOpen') || 'false',
+			includeStart = FH.Storage.getItem('OwnPartIncludeStart') || 'true',
+			arcPerConversation = FH.Storage.getItem('OwnPartArcPerConversation') || 'false';
+		
+		function nV(tier = '') {
+			return `<p class="new-row"><label>${FH.t('Boxes.Calculator.Settings.newValue')}:</label> <input type="number" class="settings-values ${tier}" style="width:30px"> <span class="btn btn-green btn-slim" onclick="Parts.SettingsInsertNewRow('${tier}')">+</span></p>`
+		}
+		
+		if(sB) {
+			buttons = JSON.parse(sB);
+
+			buttons = buttons.filter((item, index) => buttons.indexOf(item) === index); // remove duplicates
+			buttons.sort((a, b) => a - b); // order
+		}
+		else {
+			buttons = defaults.copper;
+		}
+		if(sBG) {
+			goldButtons = JSON.parse(sBG);
+
+			goldButtons = goldButtons.filter((item, index) => goldButtons.indexOf(item) === index); 
+			goldButtons.sort((a, b) => a - b);
+		}
+		else {
+			goldButtons = defaults.gold;
+		}
+
+		c.push('<section id="copperTierValues" class="flex gap p2">');
+		buttons.forEach(bonus => {
+			if(bonus === 'contribution_boost' || bonus === 'ark') 
+				c.push(`<span class="btn-group"><input type="hidden" class="settings-values" value="contribution_boost"> <button class="btn btn-slim br">${Boosts.Sums.contribution_boost}%</button></span>`);
+			
+			else 
+				c.push(`<span class="btn-group"><button class="btn btn-slim">${bonus}%</button> <input type="hidden" class="settings-values" value="${bonus}"> <span class="btn btn-delete btn-slim" onclick="Parts.SettingsRemoveRow(this)">x</span></span>`);
+			
+		});
+		c.push(nV());
+		c.push('</section>');
+
+		c.push('<section id="goldTierValues" class="flex gap p2">');
+		goldButtons.forEach(bonus => {
+			if(bonus === 'contribution_boost_gold') 
+				c.push(`<span class="btn-group"><input type="hidden" class="settings-values gold" value="contribution_boost_gold"> <button class="btn btn-slim br">${Boosts.Sums.contribution_boost_gold}%</button></span>`);
+			
+			else 
+				c.push(`<span class="btn-group"><button class="btn btn-slim">${bonus}%</button> <input type="hidden" class="settings-values gold" value="${bonus}"> <span class="btn btn-delete btn-slim" onclick="Parts.SettingsRemoveRow(this)">x</span></span>`);
+			
+		});
+		c.push(nV('gold'));
+		c.push('</section>');
+
+		c.push(`<p class="bbd p5">
+				<input type="checkbox" id="autoOpen" class="autoOpen game-cursor" ${((autoOpen == 'true') ? 'checked' : '')}> <label for="autoOpen">${FH.t('Settings.ShowOwnPartAutoOpen.Desc')}</label><br>
+				<input type="checkbox" id="openonaliengb" class="openonaliengb game-cursor" ${((allGB == 'true') ? 'checked' : '')}> <label for="openonaliengb">${FH.t('Settings.ShowOwnPartOnAllGBs.Desc')}</label><br>
+				<input type="checkbox" id="showmedals" class="showmedals game-cursor" ${((showMedals == 'true') ? 'checked' : '')}> <label for="showmedals">${FH.t('Settings.ShowOwnPartMedals.Desc')}</label><br>
+				<input type="checkbox" id="showprints" class="showprints game-cursor" ${((showPrints == 'true') ? 'checked' : '')}> <label for="showprints">${FH.t('Settings.ShowOwnPartBP.Desc')}</label><br>
+				<input type="checkbox" id="minview" class="minview game-cursor" ${((minView == 'true') ? 'checked' : '')}> <label for="minview">${FH.t('Settings.ShowOwnPartMinView.Desc')}</label><br>
+				<input id="copyformatpergb" class="copyformatpergb game-cursor" ${(Parts.CopyFormatPerGB ? 'checked' : '')} type="checkbox"> <label for="copyformatpergb">${FH.t('Boxes.OwnpartCalculator.CopyFormatPerGB')}</label><br>
+				<input type="checkbox" id="includeStart" class="includeStart game-cursor" ${((includeStart == 'true') ? 'checked' : '')}> <label for="includeStart">${FH.t('Settings.ShowOwnPartIncludeStart.Desc')}</label><br>
+				<input type="checkbox" id="arcPerConversation" class="arcPerConversation game-cursor" ${((arcPerConversation == 'true') ? 'checked' : '')}> <label for="arcPerConversation">${FH.t('Boxes.Calculator.ForderBonusPerConversation')}</label>
+			</p>
+			<button id="save-calculator-settings" class="btn saveSettings" onclick="Parts.SettingsSaveValues()">${FH.t('Boxes.Calculator.Settings.Save')}</button>`);
+
+		$('#OwnPartBoxSettingsBox').html(c.join(''));
+	},
+
+
+	SettingsInsertNewRow: (tier = '')=> {
+		let nV = `<p class="new-row">${FH.t('Boxes.Calculator.Settings.newValue')}: <input type="number" class="settings-values ${tier}" style="width:30px"> <span class="btn btn-green btn-slim br" onclick="Parts.SettingsInsertNewRow('${tier}')">+</span></p>`;
+
+		$(nV).insertAfter( $((tier==='gold'? '#goldTierValues' : '#copperTierValues') + ' .new-row:eq(-1)') );
+	},
+
+
+	SettingsRemoveRow: ($this)=> {
+		$($this).closest('.btn-group').fadeToggle('fast', function() {
+			$(this).remove();
+		});
+	},
+
+
+	SettingsSaveValues: ()=> {
+		let values = [], goldValues = [];
+
+		$('.settings-values').each(function() {
+			let v = $(this).val().trim();
+
+			if ($(this).hasClass('gold') && v) {
+				if (v !== 'ark' && !v.includes('contribution_boost')) goldValues.push( parseFloat(v) );
+				else goldValues.push(v);
+			}
+			else if (v) {
+				if (v !== 'ark' && !v.includes('contribution_boost')) values.push( parseFloat(v) );
+				else values.push(v);
+			}
+		});
+
+		FH.Storage.setItem('CustomPartCalcButtons', JSON.stringify(values));
+		FH.Storage.setItem('CustomPartCalcGoldButtons', JSON.stringify(goldValues));
+
+		let OldCopyFormatPerGB = Parts.CopyFormatPerGB;
+		Parts.CopyFormatPerGB = $('.copyformatpergb').prop('checked');
+		FH.Storage.setItem(Parts.GetStorageKey('CopyFormatPerGB', null), Parts.CopyFormatPerGB);
+
+		let openforeignGB = true;
+		if ($("#openonaliengb").is(':not(:checked)'))
+			openforeignGB = false;
+		FH.Storage.setItem('ShowOwnPartOnAllGBs',openforeignGB);
+
+		let showMedals = true;
+		if ($("#showmedals").is(':not(:checked)'))
+			showMedals = false;
+		FH.Storage.setItem('OwnPartShowMedals',showMedals);
+
+		let showPrints = true;
+		if ($("#showprints").is(':not(:checked)'))
+			showPrints = false;
+		FH.Storage.setItem('OwnPartShowBP',showPrints);
+
+		let minView = true;
+		if ($("#minview").is(':not(:checked)'))
+			minView = false;
+		FH.Storage.setItem('OwnPartMinView',minView);
+		
+		let autoOpen = true;
+		if ($("#autoOpen").is(':not(:checked)'))
+			autoOpen = false;
+		FH.Storage.setItem('OwnPartAutoOpen',autoOpen);
+		let includeStart = true;
+		if ($("#includeStart").is(':not(:checked)'))
+			includeStart = false;
+		FH.Storage.setItem('OwnPartIncludeStart',includeStart);
+
+		let arcPerConversation = $("#arcPerConversation").is(':checked');
+		FH.Storage.setItem('OwnPartArcPerConversation', arcPerConversation);
+		if (arcPerConversation !== Parts.ArcPerConversation) {
+			Parts.ArcPerConversation = arcPerConversation;
+			Parts.GetConversationBonus();
+		}
+
+		$(`#OwnPartBoxSettingsBox`).fadeToggle('fast', function(){
+			$(this).remove();
+
+			if (Parts.CopyFormatPerGB !== OldCopyFormatPerGB) Parts.FirstCycle = true;
+			Parts.CalcBody();
+		});
+	},
+
+	setDonation: (value) => {
+		if (!Parts.allowCopyPlace)
+			FH.helper.str.copyToClipboardLegacy(String(value));
+		else { //Set Cursor to input field
+			mouseActions.randomClick([189, -62, 'Center']);
+			KeyboardEvents.paste(String(value));
+		}
+	}
+};

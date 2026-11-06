@@ -1,0 +1,31 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Licensed under AGPL - see LICENSE.md for details.
+ */
+
+#mapScoutingTimesDialog img{
+    width: 25px;
+    height: 25px;
+}
+
+#mapScoutingTimesDialogBody {
+    width: 450px;
+    max-height: 50vh;
+}
+
+#mapScoutingTimesDialogBody tr.scouted {
+    background-color:var(--table-bg-success);
+}
+
+#mapScoutingTimesDialogBody td.scouting {
+    animation-name: scouting;
+    animation-duration: 6s;
+    padding-left:5px;
+    animation-iteration-count: infinite;
+}
+
+@keyframes scouting {
+    0% {padding-left:5px;}
+    50% {padding-left:50px;}
+    100% {padding-left:5px;}
+}

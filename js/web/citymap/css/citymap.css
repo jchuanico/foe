@@ -1,0 +1,689 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Copyright (C) 2026 Forge Hammer
+ * Licensed under AGPL - see LICENSE.md for details.
+ */
+
+#citymap-main {
+	left: 15px;
+	width: 70em;
+	bottom: 15px;
+	top: 15px;
+}
+
+#citymap-mainBody.window-body {
+	position: relative;
+}
+
+#citymap-mainBody #citymap-wrapper {
+	position: relative;
+	width: 100%;
+	height: 100%;
+}
+
+#city-map-menu, #city-map-menu-bottom {
+	position: absolute;
+	display: flex;
+	flex-direction: row;
+	top: 0;
+	right: 260px;
+	left: 0;
+	z-index: 5000;
+	padding: 2px;
+	box-sizing: border-box;
+}
+
+#city-map-menu-bottom {
+	top: unset;
+	bottom: 0;
+	justify-content: end;
+}
+
+#map-container {
+	overflow: hidden;
+	position: absolute;
+	top: 0;
+	right: 260px;
+	bottom: 0;
+	left: 0;
+	border-right: 2px solid var(--bg-dark);
+	background-color: var(--black-50);
+	box-sizing: border-box;
+}
+
+#map-container.with-sidebar, .outpost #map-container {
+	right: 0;
+}
+
+.outpost.stellar_city .goods-sprite.diplomacy::before { display: none; }
+
+#sidebar {
+	position: absolute;
+	width: 260px;
+	padding: 12px;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	overflow: hidden;
+	overflow-y: auto;
+	box-sizing: border-box;
+}
+
+#sidebar #area-state img {
+	width: 22px;
+}
+#sidebar #area-state ul, #sidebar #area-state li {
+	margin: 0;
+	padding: 0;
+}
+
+#sidebar #area-state ul + b {
+	border-top: 1px dotted var(--bg-dark);
+	padding: 5px 0;
+	margin: 5px 0 2px;
+	color: var(--text-highlight);
+	display: block;
+}
+
+#sidebar #area-state .highlight-map li:hover {
+	background-color: var(--table-bg-hover);
+	margin: 0 -2px 2px;
+	padding: 0 2px;
+}
+
+#sidebar .highlight-map li.active span:first-child {
+	font-weight: bold;
+}
+
+#sidebar #area-state li {
+	display: inline-flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	margin-bottom: 2px;
+}
+#sidebar #area-state li label {
+	flex-grow: 2;
+	align-items: center;
+	display: inline-flex;
+	gap: 2px;
+}
+#sidebar #area-state li span:last-child {
+	text-align: right;
+}
+#sidebar #area-state li:hover label {
+	font-weight: bold;
+	color: var(--text-highlight);
+}
+
+.outpost #BuildingsFilter, .outpost #city-map-menu .btn-group, .outpost #map-filters {
+	display: none;
+}
+
+.outpost #sidebar {
+	display: block;
+	width: 420px;
+	padding: 3px;
+	z-index: 5001;
+}
+
+.outpost .metaSums {
+	background: linear-gradient(180deg, var(--bg-dark) 20%, transparent);
+	padding: 7px;
+}
+.outpost.guild_raids .metaSums span {
+	padding: 2px;
+}
+.outpost:not(.guild_raids) .metaSums span {
+	height: 20px;
+	display: inline-flex;
+	width: 25px;
+	position: relative;
+}
+.outpost:not(.guild_raids) .metaSums span::before {
+	position: absolute;
+	top: 3px;
+}
+.outpost:not(.guild_raids) .metaSums span.diplomacy::before {
+	top: 21px;
+}
+.outpost .metaSums i {
+	font-size: 90%;
+}
+
+.outpost .metaSums .productions, .outpost .metaSums .boosts {
+	display: flex;
+	justify-content: center;
+	gap: 2px;
+}
+
+.outpost.guild_raids .flex.between span {
+	display: inline-flex;
+	align-items: center;
+}
+
+.outpost.guild_raids .flex.between img {
+	height: 24px;
+}
+
+.outpost.guild_raids .euphoria150 {
+	color: var(--limegreen);
+	font-weight: bold;
+}
+
+.outpost.guild_raids .euphoria20 {
+	color: var(--danger-red);
+	font-weight: bold;
+}
+
+.outpost.guild_raids #sidebar .allBuildings.foe-table thead tr th {
+	vertical-align: middle !important;
+}
+
+.outpost.guild_raids #sidebar .allBuildings {
+	font-size: 90%;
+}
+
+.outpost.guild_raids #sidebar .allBuildings img, .outpost .metaSums .boosts img {
+	max-height: 20px;
+}
+
+.outpost #sidebar .allBuildings td .building img {
+	max-height: 31px;
+	max-width: 40px;
+	margin: auto;
+	display: inline-block;
+}
+
+.outpost #sidebar .allBuildings td div.building {
+	background: #6b7529;
+	width: 50px;
+	margin: -3px 0;
+	display: inline-flex;
+	vertical-align: middle;
+	text-align: center;
+	height: 31px;
+	border-bottom: 1px solid #50581b;
+	border-top: 1px solid #818d2f;
+}
+
+.outpost #map-container, .outpost #city-map-menu {
+	right: 420px;
+}
+
+.outpost.cultural_outpost .openOverview {
+	position: absolute;
+	top: 1px;
+	right: 423px;
+	z-index: 5001;
+}
+
+#citymap-mainBody .prod::before {
+	background: transparent url('../../productions/images/productions.png') -233px 2px no-repeat;
+	background-size: auto 100%;
+	display: inline-block;
+	content: '';
+	width: 20px;
+	height: 20px;
+}
+
+#citymap-mainBody .prod.happiness::before { background-position: -117px 2px; }
+#citymap-mainBody .prod.guild_raids_money::before { background-position: -20px 2px; }
+#citymap-mainBody .prod.guild_raids_supplies::before { background-position: -40px 2px; }
+#citymap-mainBody .prod.att_def_boost_attacker::before { background-position: -340px 1px; }
+#citymap-mainBody .prod.att_def_boost_defender::before { background-position: -362px 1px; }
+#citymap-mainBody .prod.guild_raids_action_points_collection::before { background-position: -383px 2px; }
+
+#citymap-mainBody .population::before, #citymap-mainBody th.happiness::before {
+	background: transparent url('../../productions/images/productions.png') -233px 0 no-repeat;
+	background-size: auto 100%;
+	display: inline-block;
+	content: '';
+	width: 23px;
+	height: 23px;
+}
+#citymap-mainBody .population::before { background-position: -157px 0; }
+#citymap-mainBody th.happiness::before { background-position: -135px 0; }
+#citymap-mainBody .diplomacy::before { zoom: 0.45; }
+#citymap-mainBody th .diplomacy { height: 24px; }
+
+#sidebar p {
+	margin-bottom: 5px;
+}
+
+#grid-outer {
+	position: relative;
+	transition: transform .35s linear;
+	margin: 40px 20px;
+}
+
+#grid-outer * {
+	padding: 0;
+	margin: 0;
+	box-sizing: border-box;
+	-moz-box-sizing: border-box;
+	-webkit-box-sizing: border-box;
+}
+
+#grid-outer[data-view="turned"] {
+	transform: rotate(90deg);
+}
+
+#grid-outer[data-view="skew"] {
+	transform: rotate(33deg) skew(-30deg,-5deg);
+}
+
+#map-grid {
+	display: flex;
+	flex-wrap: wrap;
+	width: 68.1em;
+	height: 72em;
+}
+
+#map-grid span[data-grid] {
+	display: inline-block;
+	border-right: 1px solid #ccc;
+	border-bottom: 1px solid #ccc;
+}
+
+#map-grid .map-bg {
+	background: transparent url('../images/map-bg.png') top left repeat;
+	background-size: 4em;
+	width: 4em;
+	height: 4em;
+}
+#map-grid .map-bg.startmap {
+	width: 16em;
+	height: 16em;
+}
+
+/* ------------------------------ */
+[data-unit="180"] #map-grid, [data-unit="180"] #map-buildings {
+	zoom: 1.8
+}
+[data-unit="160"] #map-grid, [data-unit="160"] #map-buildings {
+	zoom: 1.6
+}
+[data-unit="140"] #map-grid, [data-unit="140"] #map-buildings {
+	zoom: 1.4
+}
+[data-unit="120"] #map-grid, [data-unit="120"] #map-buildings {
+	zoom: 1.2
+}
+[data-unit="100"] #map-grid, [data-unit="100"] #map-buildings {
+	zoom: 1
+}
+[data-unit="100"][data-view="skew"] {
+	transform: translate(0, -20%);
+}
+[data-unit="80"] #map-grid, [data-unit="80"] #map-buildings {
+	zoom: 0.8
+}
+[data-unit="60"] #map-grid, [data-unit="60"] #map-buildings {
+	zoom: 0.6
+}
+[data-unit="60"][data-view="turned"] {
+	top: 50px;
+}
+
+/* ------------------------------ */
+
+#grid-outer.desaturate span.entity, #grid-outer.desaturate span.map-bg {
+	filter: saturate(0.9) brightness(0.6) !important;
+}
+
+#grid-outer span.entity {
+	display: block;
+	background-color: var(--background-color-military);
+	position: absolute;
+	z-index: 10;
+	box-shadow: inset 0 0 0 1px #0004;
+	transition: all 0.3s ease-in-out;
+}
+
+#grid-outer.mode-efficiency span.entity.heatmap:not(.street) {
+	--heat-low: #d86d02;
+	--heat-mid: #eee;
+	--heat-high: #0012b1;
+
+	--t-low: clamp(0, (0.5 - var(--intensity, 0)) * 2, 1);
+	--t-high: clamp(0, (var(--intensity, 0) - 0.5) * 2, 1);
+
+	background: color-mix(in oklab,
+		color-mix(in oklab, var(--heat-mid), var(--heat-low) calc(var(--t-low) * 100%)),
+		var(--heat-high) calc(var(--t-high) * 100%)
+	);
+	background-image: none !important;
+	color: color-mix(in srgb, #eee calc(clamp(0, (var(--intensity, 0) - 0.75) * 1000, 1) * 100%), rgb(14, 14, 37));
+	text-shadow: none;
+}
+
+#grid-outer.mode-efficiency span.entity.heatmap.heat-zero:not(.street) {
+	background: #717171 repeating-linear-gradient(45deg, transparent 0 4px, #818181 4px 6px) !important;
+}
+
+#grid-outer.mode-efficiency span.entity[data-heat]:not([data-heat=""])::after {
+	content: attr(data-heat);
+	font-size: 0.6em;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 100%;
+	opacity: 0;
+}
+
+#grid-outer.mode-efficiency span.entity:not(.street) {
+	box-shadow: inset 0 0 0 1px #0004 !important;
+}
+#grid-outer.mode-efficiency.desaturated span.entity,
+#grid-outer.mode-efficiency #map-buildings.transparent span.entity {
+	filter: none;
+	opacity: 1;
+}
+
+#grid-outer span.map-bg {
+	display: block;
+	position: absolute;
+	z-index: 1;
+}
+
+.allBuildings tr td:first-child::before {
+	content: '';
+	width: 9px;
+	height: 9px;
+	display: inline-block;
+	border-radius: 7px;
+	margin: 0 3px 0 -2px;
+	box-shadow: 0 1px 1px var(--black-65), 0 1px 3px var(--black-50);
+} 
+
+#grid-outer span.residential, tr.residential td:first-child::before {
+	background-color: var(--background-color-residential);
+}
+#grid-outer span.tower, #grid-outer span.impediment {
+	background-color: var(--background-color-tower);
+}
+#grid-outer span.decoration, tr.decoration td:first-child::before, #grid-outer span.diplomacy, tr.diplomacy td:first-child::before {
+	background-color: var(--background-color-decoration);
+}
+#grid-outer span.street {
+	background-color: var(--background-color-street) !important;
+}
+#grid-outer span.goods, #grid-outer span.cultural_goods_production, #grid-outer span.stellar_capacity, tr.cultural_goods_production td:first-child::before, tr.stellar_capacity td:first-child::before, #grid-outer span[class*=W_StellarAgeDiscovery_StellarCapacityBoost], tr[class*=W_StellarAgeDiscovery_StellarCapacityBoost] td:first-child::before {
+	background-color: var(--background-color-goods);
+}
+#grid-outer span.culture, tr.culture td:first-child::before {
+	background-color: var(--background-color-culture);
+}
+#grid-outer span.main_building, tr.main_building td:first-child::before {
+	background-color: var(--background-color-main_building);
+}
+#grid-outer span.production, #grid-outer span.stellar_points, tr.production td:first-child::before, tr.stellar_points td:first-child::before, #grid-outer span[class*=W_StellarAgeDiscovery_StellarPointsBoost], tr[class*=W_StellarAgeDiscovery_StellarPointsBoost] td:first-child::before {
+	background-color: var(--background-color-production);
+}
+#grid-outer span.greatbuilding {
+	background-color: var(--background-color-greatbuilding);
+}
+#grid-outer span.random_production {
+	background-color: var(--background-color-random_production);
+}
+
+#grid-outer span span {
+	display: none;
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	padding: 2px 3px;
+	background-color: var(--grey);
+	white-space: nowrap;
+}
+
+#grid-outer span:hover span {
+	display: inline-block;
+}
+
+/* mark old buildings*/
+#grid-outer span.older-1.diagonal, span.older-1.diagonal {
+	background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, #80985d 2px, #80985d 7px)
+}
+#grid-outer span.older-2.diagonal, span.older-2.diagonal {
+	background-image: repeating-linear-gradient(317deg, transparent, transparent 5px, #855f0e 2px, #855f0e 7px)
+}
+#grid-outer span.older-3.diagonal, span.older-3.diagonal {
+	background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, #a54a3e 2px, #a54a3e 9px);
+}
+#grid-outer span.too-old.diagonal, span.too-old.diagonal {
+	background-image: repeating-linear-gradient(202deg, transparent, transparent 5px, #ab1a0d 2px, #ab1a0d 9px)
+}
+#grid-outer span.noStreet.highlight {
+	background-color: var(--background-color-noStreet);
+}
+#grid-outer span:not(.street).rating10.highlight4 {
+	background-color: #f00;
+}
+#grid-outer span:not(.street).rating20.highlight4 {
+	background-color: rgb(255, 102, 0);
+	background-image: repeating-linear-gradient(-45deg, transparent, transparent 5px, #c00 2px, #c00 7px);
+}
+#grid-outer span:not(.street).rating30.highlight4 {
+	background-color: rgb(255, 208, 0);
+	background-image: repeating-linear-gradient(-45deg, transparent, transparent 5px, #c00 2px, #c00 7px);
+}
+#grid-outer span.ascendable.highlight2 {
+	background-color: var(--background-color-ascendable);
+}
+#grid-outer span.decayed.highlight3 {
+	background-image: linear-gradient(45deg, transparent 50%, var(--background-color-ascendable) 50%);
+	background-color: var(--background-color-decayed);
+}
+#grid-outer span:not(.street).fspDisabled.highlight5 {
+	background-color: #b10808;
+}
+#grid-outer span.collectSoon {
+	background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, #fff1 2px, #fff1 7px);
+}
+#grid-outer span.collectSoon::after {
+	content: '⬤';
+    display: flex;
+    text-align: center;
+    align-items: center;
+    justify-content: center;
+    width: inherit;
+    color: #fffa;
+    height: inherit;
+	text-shadow: none;
+    font-size: 4px;
+}
+#grid-outer span.collectSoon[class*="collect1"]::after {
+	content: '⬤ ⬤';
+}
+#grid-outer span.collectSoon[class*="collect2"]::after {
+	content: '⬤ ⬤ ⬤';
+}
+#grid-outer.showLimited .isLimited {
+	background-image: radial-gradient(circle at 50%, #fff 2px, #0000 7px);
+    box-shadow: inset 0 0 0 2px #fffa;
+}
+#grid-outer.showGBG .fromGBG {
+	background-color: var(--background-color-gbg);
+}
+#grid-outer.showQI .fromQI {
+	background-color: var(--background-color-qi);
+}
+#map-buildings.transparent span:not(.notPolivated) {
+	opacity: 0.35;
+}
+#grid-outer.desaturated span:not(.collectable) {
+	filter: saturate(0.1) brightness(0.3) contrast(1.2);
+}
+
+[data-view="skew"] .older-1.diagonal {
+	background-image: repeating-linear-gradient(15deg, transparent, transparent 5px, rgb(128, 152, 93) 2px, rgb(128, 152, 93) 7px)
+}
+[data-view="skew"] .older-2.diagonal {
+	background-image: repeating-linear-gradient(250deg, transparent, transparent 5px, rgb(133, 95, 14) 2px, rgb(133, 95, 14) 7px)
+}
+[data-view="skew"] .older-3.diagonal {
+	background-image: repeating-linear-gradient(15deg, transparent, transparent 5px, rgb(165, 74, 62) 2px, rgb(165, 74, 62) 7px);
+}
+[data-view="skew"] .too-old.diagonal {
+	background-image: repeating-linear-gradient(172deg, transparent, transparent 5px, rgb(171, 26, 13) 2px, rgb(171, 26, 13) 7px)
+}
+
+
+.too-old-legends span {
+	display: inline-block;
+	width: 1em;
+	height: 1em;
+	margin-right: 3px;
+}
+
+/* ------------------------------------------------------------------------- */
+
+#CityMapSubmit {
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%,-50%);
+	width: 300px;
+}
+
+#CityMapSubmit #CityMapSubmitBody {
+	padding: 0.3rem;
+}
+
+#citymap-wrapper .mapTopRight, #city-map-menu-bottom .btn-group {
+	margin-left: auto;
+	width: max-content;
+	text-align: right;
+}
+
+#citymap-wrapper .mapTopRight input {
+	width: 130px;
+}
+
+#citymap-wrapper .mapTopRight span {
+	display: inline-block;
+}
+
+.viewmode-efficiency #area-state { display: none; }
+.viewmode-normal .map-rating { display: none; }
+
+#sidebar .viewmode-switcher {
+	display: block;
+	text-align: center;
+	margin-bottom: 8px;
+}
+
+#sidebar .map-rating label {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 90%;
+}
+
+#area-state p {
+	margin: 3px 0;
+}
+
+#area-state .building-count-area span.square {
+	background-color: var(--background-color-military);
+	box-shadow: 0 0 0 1px #0004;
+	border-radius: 3px;
+	width: 10px;
+	height: 10px;
+	display: inline-block;
+	margin-right: 5px;
+}
+
+#area-state .building-count-area span.square.military, tr.military td:first-child::before, tr.static_provider td:first-child::before, tr.mission_item td:first-child::before {
+	background-color: var(--background-color-military);
+}
+
+#area-state .building-count-area span.square.residential {
+	background-color: var(--background-color-residential);
+}
+#area-state .building-count-area span.square.decoration {
+	background-color: var(--background-color-decoration);
+}
+#area-state .building-count-area span.square.street {
+	background-color: var(--background-color-street);
+}
+#area-state .building-count-area span.square.goods, tr.goods td:first-child::before {
+	background-color: var(--background-color-goods);
+}
+#area-state .building-count-area span.square.culture {
+	background-color: var(--background-color-culture);
+}
+#area-state .building-count-area span.square.main_building {
+	background-color: var(--background-color-main_building);
+}
+#area-state .building-count-area span.square.production {
+	background-color: var(--background-color-production);
+}
+#area-state .building-count-area span.square.greatbuilding {
+	background-color: var(--background-color-greatbuilding);
+}
+#area-state .building-count-area span.square.random_production {
+	background-color: var(--background-color-random_production);
+}
+#area-state .building-count-area span.square.tower {
+	background-color: var(--background-color-tower);
+}
+
+#area-state .building-count-area label {
+	display: block;
+	font-size: 90%;
+}
+
+#area-state .building-count-area .ratings {
+	display: flex;
+	justify-content: space-between;
+}
+
+#sidebar .ratings span::after {
+    content: "➔";
+    display: inline-block;
+    background: var(--btn-bg);
+    padding: 0 2px;
+    border-radius: 3px;
+    color: var(--text-btn);
+    margin-left: 2px;
+    font-weight: normal;
+}
+
+#sidebar .ratings span:hover::after {
+    filter: contrast(1.2);
+}
+
+#citymap-main #grid-outer span.highlighted {
+    border-width: 2px !important;
+    filter: saturate(1.3) brightness(1.3) !important;
+	mix-blend-mode: color-dodge;
+	animation-name: sizing;
+    animation-duration: 0.5s;
+	z-index: 2000;
+    opacity: 100%;
+	animation-iteration-count: infinite;
+	animation-direction: alternate;
+	animation-timing-function: ease-in-out;
+}
+
+@keyframes sizing {
+    0% {transform: scale(1,1);}
+    100% {transform: scale(1.2,1.2);}
+}
+
+#sidebar.main #area-state .openList {
+	opacity: 0.5;
+}
+#sidebar.main #area-state .openList:hover {
+	opacity: 1;
+}
+#sidebar.main #area-state .openList img {
+	width: 19px;
+}
+
+#citymapExtraBody {
+	overflow: auto;
+	max-height: calc(98vh - 30px);
+}

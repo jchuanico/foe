@@ -1,0 +1,179 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Copyright (C) 2026 Forge Hammer - All Rights Reserved
+ * Licensed under AGPL - see LICENSE.md for details.
+ */
+
+#gbCalc input {
+	display: inline-block;
+	width: 35px;
+	text-align: center;
+	padding: 1px 5px;
+	line-height: 1.5;
+	border-radius: 0 4px 4px 0;
+	transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+}
+
+#gbCalc strong {
+	color: var(--text-highlight);
+}
+
+#gbCalc tr th {
+	text-align: center;
+}
+
+#gbCalc tr th span {
+	display: inline-block;
+	width: 25px;
+	height: 25px;
+	vertical-align: bottom;
+}
+
+#gbCalc tr th span.blueprint {
+	background: url(../../x_img/blueprint.png) center no-repeat;
+	background-size: contain;
+}
+
+#gbCalc.gbTier-silver tr th span.blueprint {
+	background: url(../../x_img/blueprint_silver.png) center no-repeat;
+	background-size: contain;
+}
+
+#gbCalc.gbTier-gold tr th span.blueprint {
+	background: url(../../x_img/blueprint_gold.png) center no-repeat;
+	background-size: contain;
+}
+
+#gbCalc tr th span.medal {
+	background: url(../../x_img/medal.png) center no-repeat;
+	background-size: contain;
+}
+
+#gbCalc tr th span.forgepoints {
+	background: url(../../x_img/forgepoints.png) center no-repeat;
+	background-size: contain;
+}
+
+#gbCalc .foe-table td {
+	white-space: nowrap;
+}
+
+#gbCalc td.error,
+#gbCalc td .error {
+	color: var(--danger-red);
+}
+
+#gbCalc strong.success {
+	color: var(--success);
+}
+
+#gbCalc .bpTier.silver {
+	font-weight: bold;
+}
+
+#gbCalc .text-grey,
+#gbCalc .text-grey strong {
+	color: var(--ash);
+	opacity: 0.9;
+}
+
+#gbCalc strong.info, #gbCalc td strong.info {
+	color: var(--info-blue);
+}
+
+#gbCalc tr.info-row {
+	background-color: var(--table-bg-info);
+	border-top-color: var(--table-bt-info);
+	border-bottom-color: var(--table-bb-info);
+}
+
+#gbCalc tr.bg-green {
+	background-color: var(--table-bg-success);
+	border-top-color: var(--table-bt-success);
+	border-bottom-color: var(--table-bb-success);
+}
+
+#gbCalc tr.bg-red {
+	background-color: var(--table-bg-error);
+	border-top-color: var(--table-bt-error);
+	border-bottom-color: var(--table-bb-error);
+}
+
+#gbCalc tr.bg-yellow {
+	background-color: var(--table-bg-bright);
+	border-top-color: var(--table-bt-bright);
+	border-bottom-color: var(--table-bb-bright);
+}
+
+#gbCalc .costFactorWrapper {
+	padding-top: 5px;
+	text-align: center;
+}
+
+#gbCalc .costFactorWrapper span {
+	display: inline-flex;
+	align-items: stretch;
+}
+
+#gbCalc .costFactorWrapper .btn-group {
+	text-align: center;
+	white-space: nowrap;
+}
+
+#gbCalc #costTable {
+	user-select: text;
+}
+
+.btn.arkBonus {
+	font-weight: bold;
+}
+/* Snipe box */
+#gbCalc .snipe-box {
+	margin: 4px 0;
+	padding: 4px 8px;
+	text-align: center;
+	border-top: 1px solid transparent;
+	border-bottom: 1px solid transparent;
+}
+
+#gbCalc .snipe-box.snipe-ok {
+	background-color: var(--table-bg-success);
+	border-top-color: var(--table-bt-success);
+	border-bottom-color: var(--table-bb-success);
+}
+
+#gbCalc .snipe-box.snipe-nofp {
+	background-color: var(--table-bg-error);
+	border-top-color: var(--table-bt-error);
+	border-bottom-color: var(--table-bb-error);
+}
+
+#gbCalc .snipe-title {
+	font-size: 0.85em;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	opacity: 0.8;
+}
+
+#gbCalc .snipe-main {
+	display: flex;
+	justify-content: center;
+	align-items: baseline;
+	gap: 10px;
+	font-size: 1.15em;
+}
+
+#gbCalc .snipe-place {
+	font-weight: bold;
+}
+
+#gbCalc .snipe-profit {
+	color: var(--success);
+	font-weight: bold;
+}
+
+#gbCalc .snipe-sub {
+	display: flex;
+	justify-content: center;
+	gap: 8px;
+}

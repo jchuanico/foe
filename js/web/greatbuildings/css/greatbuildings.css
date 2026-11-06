@@ -1,0 +1,67 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Licensed under AGPL - see LICENSE.md for details.
+ */
+
+
+/* Box */
+#greatbuildings {
+	top: 30%;
+	right: 15%;
+	width: 700px;
+	height: 700px;
+}
+
+#greatbuildings #greatbuildingsBody {
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+#greatbuildings #greatbuildingsBody strong.success {
+	color: var(--success);
+}
+
+.text-bright {
+	color: var(--text-highlight);
+}
+
+#greatbuildings .title {
+	font-size: 115%;
+}
+
+#greatbuildings .header {
+	margin-bottom: 2px;
+	padding: 1em 0;
+}
+
+#greatbuildings #greatbuildingsBody table th {
+	font-size: 85%;
+}
+
+#greatbuildings #greatbuildingsBody td {
+	position: relative;
+	font-size: 85%;
+}
+
+#greatbuildings #greatbuildingsBody strong.player-name {
+	display: block;
+	white-space: nowrap;
+	color: var(--text-highlight);
+	margin: 0 10px;
+}
+
+#greatbuildings #greatbuildingsBody .gbmainrow td {
+	padding: 0.3rem 5px;
+}
+
+#greatbuildings #greatbuildingsBody .gbmainrow td:last-child {
+	background-image: url('../../../../images/hud/chevron-left.svg');
+	background-size: 20px 20px;
+	background-position: center right;
+	background-repeat: no-repeat;
+	min-width: 4px;
+}
+
+#greatbuildings #greatbuildingsBody .gbmainrow.active td:last-child {
+	background-image: url('../../../../images/hud/chevron-down.svg');
+}

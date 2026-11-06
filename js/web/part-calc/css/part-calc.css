@@ -1,0 +1,454 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Copyright (C) 2026 Forge Hammer
+ * Licensed under AGPL - see LICENSE.md for details.
+ */
+
+#OwnPartBox {
+	top: 100px;
+	min-width: 290px;
+}
+
+#OwnPartBox span.title {
+	max-width: 190px;
+}
+
+#OwnPartBox .OwnPartDrops {
+	display: flex;
+}
+
+#OwnPartBox .OwnPartDrops div:first-child {
+	min-width: 90px;
+	margin-right: 10px;
+}
+
+#OwnPartBox .OwnPartDrops .dropLGStepSelect {
+	min-width: 40px;
+}
+
+#OwnPartBox .OwnPartDrops .inputWrapper {
+	margin-left: auto;
+	position: relative;
+	top: -3px;
+}
+
+#OwnPartBox .OwnPartDrops .inputWrapper input {
+	max-width: 45px;
+	text-align: right;
+	margin: 0;
+	font-size: 0.8rem;
+	height: 15px;
+}
+
+#OwnPartBox .OwnPartDrops div select {
+	line-height: 1.5;
+	max-width: 160px;
+}
+
+#OwnPartBoxBodyWrapper {
+	margin-top: 10px;
+}
+
+#OwnPartBox .header {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-size: 90%;
+}
+
+#OwnPartBox .header .player-portrait {
+	width: 30px;
+	padding-left: 5px;
+	margin-right: -25px;
+	position: relative;
+    z-index: 5;
+}
+
+#OwnPartBox .header .player-portrait img {
+	width: 30px;
+	border-radius: 3px;
+}
+
+#OwnPartBox .header .player-portrait:hover img {
+	filter: brightness(1.2);
+}
+
+#OwnPartBox .header .player-portrait svg {
+	color: var(--info-blue);
+	display: none;
+	position: absolute;
+	top: 24px;
+    left: 30px;
+}
+
+#OwnPartBox .header .player-portrait:hover svg {
+	display: block;
+}
+
+#OwnPartBox .header span {
+	color: var(--text);
+}
+
+#OwnPartBox .header .player-name {
+	display: block;
+	white-space: nowrap;
+}
+
+#OwnPartBox .header .player-name.isSelf {
+	display: none;
+}
+
+#OwnPartBox .gbLevels {
+	margin: 0 0 3px;
+}
+
+#OwnPartBox .gbLevels .btn {
+	padding: 2px 3px;
+	margin: -3px 0;
+	line-height: 1;
+}
+
+#OwnPartBox .rq {
+	padding: 0 3px;
+}
+
+#OwnPartBox .donequests-icon {
+    background: url(../../x_img/quest.png);
+	background-size: contain;
+	width: 20px;
+	height: 17px;
+	display: inline-flex;
+}
+
+#gbCosts {
+	position: relative;
+	margin-left: 0;
+}
+
+#OwnPartBox.gbSettingsOpen #gbCosts {
+	filter: brightness(0.3);
+}
+
+#OwnPartBox .fh-icon-settings {
+	margin-right: 1px;
+	display: inline-flex;
+}
+
+#OwnPartBox .icon-close {
+    filter: saturate(0.7) contrast(1.7);
+    opacity: 0.5;
+	position: absolute;
+	right: 0;
+	top: 0;
+}
+
+#OwnPartBox.gbSettingsOpen #gbCosts .fh-icon-settings {
+	filter: brightness(1.9) saturate(1.5) contrast(1.1);
+	box-shadow: 0 0 3px var(--black-65), 0 0 10px var(--white), 0 0 15px var(--black-65);
+	border-radius: 3px;
+	scale: 1.1;
+	border: 2px solid var(--white);
+	margin: 2px;
+	left: -4px;
+}
+
+#OwnPartBox h1 {
+	padding: 0;
+}
+
+#gbCosts strong, #gbCosts strong.normal, #up-to-level-up, .recurringquests, #OwnPartBox .highlighted-text {
+	color: var(--text-highlight);
+}
+
+#gbCosts .success, #gbCosts .success strong {
+	color: var(--success) !important;
+}
+
+#gbCosts .info, #gbCosts .paidFP {
+	color: var(--info-blue) !important;
+}
+
+#gbCosts .error {
+	color: var(--danger-red);
+}
+
+#gbCosts .lb-info {
+	flex-grow: 2;
+}
+
+#gbCosts input[type=number], #PowerLevelingBox input {
+	line-height: 1;
+	width: 35px;
+	text-align: center;
+	margin: 0 -2px;
+	font-size: 95%;
+}
+
+#gbCosts #arc-percent {
+	background-clip: padding-box;
+	text-align: center;
+	width: 30px;
+	margin: 0 5px;
+}
+
+#gbCosts .bottom-buttons {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+#gbCosts .bottom-buttons .flex {
+	align-items: center;
+}
+
+#OwnPartBox .black-bg {
+	position: absolute;
+	background-color: var(--black-65);
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 0;
+}
+
+#OwnPartBox table.foe-table {
+	border-top: 2px solid transparent;
+}
+
+#OwnPartBox .gbTier-silver table.foe-table {
+	border-top: 2px solid var(--silver);
+}
+#OwnPartBox .gbTier-gold table.foe-table, #goldTierValues {
+	border-top: 2px solid var(--golden);
+}
+#goldTierValues {
+	border-bottom: 2px solid var(--golden);
+}
+#OwnPartBox .new-row {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 3px;
+	width: 100%;
+}
+
+#gbCosts tr th span {
+	display: inline-block;
+	width: 25px;
+	height: 25px;
+	vertical-align: bottom;
+}
+
+#gbCosts tr th span.blueprint {
+	background: url(../../x_img/blueprint.png) center no-repeat;
+	background-size: 85%;
+}
+
+#gbCosts.gbTier-silver tr th span.blueprint {
+	background: url(../../x_img/blueprint_silver.png) center no-repeat;
+	background-size: contain;
+}
+
+#gbCosts.gbTier-gold tr th span.blueprint {
+	background: url(../../x_img/blueprint_gold.png) center no-repeat;
+	background-size: contain;
+}
+
+#gbCosts tr th span.medal {
+	background: url(../../x_img/medal.png) center no-repeat;
+	background-size: 65%;
+}
+
+#gbCosts tr th span.forgepoints {
+	background: url(../../x_img/forgepoints.png) center no-repeat;
+	background-size: contain;
+}
+
+#gbCosts tr th span.forgepointsDone {
+	background: url(../../../../images/hud/success-icon.png) center no-repeat;
+	background-size: 75%;
+}
+
+#gbCosts tr th span.arcBonus {
+	background: url(../../x_img/arc_bonus.png) center no-repeat;
+	background-size: 75%;
+}
+
+#gbCosts tr td:nth-child(6) {
+	border-left: 3px solid rgba(0,0,0,0.01);
+}
+
+.OwnPartBoxBackgroundBody .divider {
+	display: block;
+	height: 0;
+	margin: 10px auto;
+	width: 80%;
+	border-top: 1px solid var(--border-medium);
+	border-bottom: 1px solid  var(--border-medium);
+}
+
+.OwnPartBoxBackgroundBody {
+	width: 300px;
+	position: absolute;
+	overflow: hidden;
+	overflow-y: auto;
+	top: -5px;
+	left: -5px;
+	padding: 0 7px;
+	border-width: 3px;
+	border-radius: 5px;
+	display: none;
+}
+
+.OwnPartBoxBackgroundBody strong {
+	color: var(--text-highlight)
+}
+
+.OwnPartBoxBackgroundBody > div > span:not(.btn) {
+	display: inline-block;
+	width: 70px;
+}
+
+.OwnPartBoxBackgroundBody .btn-outer {
+	margin-bottom: 6px;
+}
+
+.OwnPartBoxBackgroundBody input,
+.OwnPartBoxBackgroundBody select {
+	font-size: 0.8rem;
+	height: 18px;
+	width: 164px;
+	padding: 2px 5px;
+	text-align: left !important;
+}
+
+.OwnPartBoxBackgroundBody input[id=copystring] {
+	width: 100%;
+	background-color: inherit;
+	color: inherit;
+	border: none;
+	padding: 0;
+}
+
+.OwnPartBoxBackgroundBody .checkboxes {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	flex-direction: row;
+	gap: 2px;
+}
+
+.OwnPartBoxBackgroundBody .checkboxes::after {
+	content: '';
+	flex: auto;
+}
+
+.OwnPartBoxBackgroundBody input.form-check-input {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: auto;
+}
+
+.OwnPartBoxBackgroundBody label.form-check-label {
+	line-height: 1.2rem;
+	width: calc(50% - 1px);
+	vertical-align: middle;
+	position: relative;
+	background: var(--table-bg-odd);
+}
+
+.OwnPartBoxBackgroundBody label.form-check-label span, .OwnPartBoxBackgroundBody label.form-check-label-wide span {
+	display: inline-block;
+	margin-left: 22px;
+}
+
+
+#PowerLevelingBox {
+	top: 30%;
+	left: 100px;
+	max-width: 700px;
+}
+
+#PowerLevelingBox #PowerLevelingBoxBody {
+	overflow-x: hidden;
+	overflow-y: auto;
+	max-height: 500px;
+	user-select: text;
+}
+
+#PowerLevelingBox #PowerLevelingBoxBody .foe-table td, #PowerLevelingBox #PowerLevelingBoxBody .foe-table th {
+	text-align: center;
+}
+
+#PowerLevelingBox #PowerLevelingBoxBody .foe-table td:first-child, #PowerLevelingBox #PowerLevelingBoxBody .foe-table td:nth-child(6) {
+	border-right: 1px solid var(--text-dark);
+}
+
+#PowerLevelingBox #PowerLevelingBoxBody .foe-table td.bright, strong.bright {
+	color: var(--text-highlight);
+	font-weight: bold;
+}
+
+#PowerLevelingBox #PowerLevelingBoxBody .success {
+	color: var(--success);
+}
+
+
+#calcReminder {
+	top: 20px;
+}
+
+#calcReminder b {
+	color: var(--text-highlight);
+}
+
+#calcReminder .content {
+    border-top: 1px solid var(--table-bg-hover);
+	padding: 2px;
+}
+
+#calcReminder .gbEntry {
+    white-space: nowrap;
+}
+
+#calcReminder .gbEntry:hover {
+    text-decoration: line-through;
+}
+
+#OwnPartBox.closed .btn-group, #OwnPartBox.closed .level-switch,.closed .dark-bg, #OwnPartBox.closed .dark-bg:hover, #OwnPartBox.closed .activity, #OwnPartBox.closed svg, #OwnPartBox.closed .player-portrait, #OwnPartBox.closed .lg-not-possible {
+	display: none;
+}
+#OwnPartBox.closed #OwnPartTable, .closed .gbLevels, .closed .text-smaller, #OwnPartBox.closed .title, #OwnPartBox.closed #costTableFordern {
+	visibility: hidden;
+}
+#OwnPartBox.closed .header,.closed .header:hover {
+	display: block;
+	text-align: left;
+	background: transparent !important;
+	box-shadow: none;
+	position: absolute;
+	top: -44px;
+	left: -28px;
+	width: 220px;
+	transform: scale(0.75);
+}
+#OwnPartBox.closed #gbCalc .header,.closed #gbCalc .header:hover {
+	top: -13px;
+}
+#OwnPartBox.closed #OwnPartBoxBody {
+	visibility: visible !important;
+	overflow: visible;
+}
+#OwnPartBox.closed .player-name a {
+	position: relative;
+	top: -5px;
+	color: var(--text);
+	letter-spacing: 1px;
+}
+.closed #gbCosts, .closed #gbCalc, #OwnPartBox.closed .gbLevels {
+	height: 0px;
+	pointer-events: none;
+}
+#OwnPartBox.closed .player-name.isSelf {
+	display: block;
+}

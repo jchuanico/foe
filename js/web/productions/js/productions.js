@@ -1,0 +1,3747 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team 
+ * Copyright (C) 2026 Forge Hammer
+ * Licensed under AGPL - see LICENSE.md for details.
+ */
+
+let Productions = {
+
+	CombinedCityMapData: {},
+	BuildingsAll: [],
+	BuildingsProducts: [],
+	BuildingsProductsGroups: [],
+	ShowDaily: false,
+	ratedBuildings:null,
+	ActiveTab: 1,
+	Filter: null,
+	ProfileDataLoaded: false,
+
+	Tabs: [],
+	TabsContent: [],
+
+	Types: [
+		'strategy_points',			// Forge Points
+		'forge_points_production', 	// FP Boost
+		'goods',					// Regular goods
+		'goods_production',			// goods boost
+		'special_goods', 			// *special* goods
+		'special_goods_production', // *special* goods boost
+		'items',					// Fragments, blueprints, boosts etc
+		'money',					// Coins
+		'coin_production', 			// Coin Boost
+		'supplies',
+		'supply_production', 		// Supply Boost
+		'medals',
+		'medal_production',
+		'premium',					// Diamonds
+		'population',
+		'happiness',
+		'units',
+		'att_boost_attacker',
+		'def_boost_attacker',
+		'att_boost_defender',
+		'def_boost_defender',
+		'clan_goods',
+		'guild_goods_production', // guild goods boost
+		'guild_raids'
+	],
+	FSPqualifiedResources: ["strategy_points","clan_goods","goods-previous","goods-current","goods-next"],
+
+	HappinessBoost: 0,
+	PopulationSum: 0,
+	HappinessSum: 0,
+	Boosts: [],
+
+	Buildings: [
+		'greatbuilding',
+		'production',
+		'random_production',
+		'residential',
+		'decoration',
+		'street',
+		'goods',
+		'culture',
+		'main_building',
+		'off_grid',
+		'generic_building'
+	],
+
+	RatingCurrentTab: 'Results',
+	RatingBuildingTab: 'everything',
+	RatingSearchTerm: '',
+	ScoreModifierPending: [],
+
+	fragmentsSet: new Set(),
+	efficiencySettings: Object.assign(
+		JSON.parse(FH.Storage.getItem("Productions.efficiencySettings") || 
+			`{
+			"tilevalues":false,
+			"showitems":true,
+			"showhighlighted":false,
+			"inventorybuildingscore":0.5,
+			"gBs":true,
+			"showLimited":true,
+			"showallies":false
+			}`
+		),
+		{showhighlighted: false}
+	),
+
+	
+	
+	Rating: {
+		Data:null,
+		Types:null,
+		Presets: null,
+		PresetStorageKey: 'Productions.Rating.Presets',
+		LegacyStorageKey: 'Productions.Rating.Data',
+		ScoreModifiers: null,
+		ScoreModifierStorageKey: 'Productions.Rating.ScoreModifiers',
+
+
+		getDefaultData: () => ({
+			'strategy_points': {order:1,perTile:8,active:true,group:1},
+			'forge_points_production': {order:2,perTile:0.25,active:true,group:1},
+			'fsp': {order:3,perTile:0.5,active:true,group:1},
+			'goods-previous': {order:5,perTile:7,active:true,group:1},
+			'goods-current': {order:7,perTile:6,active:true,group:1},
+			'goods-next': {order:9,perTile:5,active:true,group:1},
+			'goods_production': {order:11,perTile:0.25,active:true,group:1},
+			'money': {order:13,perTile:null,active:false,group:1},
+			'supplies': {order:15,perTile:null,active:false,group:1},
+			'medals': {order:16,perTile:null,active:false,group:1},
+			'population': {order:17,perTile:null,active:false,group:1},
+			'happiness': {order:19,perTile:null,active:false,group:1},
+			'clan_goods': {order:21,perTile:30,active:true,group:1},
+			'units': {order:22,perTile:6,active:true,group:2},
+			'units-next': {order:22.5,perTile:6,active:true,group:2},
+			'att_boost_attacker-all': {order:23,perTile:8,active:true,group:2} ,
+			'att_boost_attacker-guild_expedition': {order:24,perTile:11,active:true,group:2},
+			'att_boost_attacker-battleground': {order:25,perTile:10,active:true,group:2} ,
+			'def_boost_attacker-all': {order:26,perTile:8,active:true,group:2},
+			'def_boost_attacker-guild_expedition': {order:27,perTile:11,active:true,group:2},
+			'def_boost_attacker-battleground': {order:28,perTile:10,active:true,group:2} ,
+			'att_boost_defender-all': {order:29,perTile:8,active:true,group:2},
+			'att_boost_defender-guild_expedition': {order:30,perTile:11,active:true,group:2},
+			'att_boost_defender-battleground': {order:31,perTile:10,active:true,group:2},
+			'def_boost_defender-all': {order:32,perTile:8,active:true,group:2},
+			'def_boost_defender-guild_expedition': {order:33,perTile:11,active:true,group:2},
+			'def_boost_defender-battleground': {order:34,perTile:10,active:true,group:2},
+			'guild_raids_action_points_collection': {order:60,perTile:8,active:true,group:3},
+			'guild_raids_goods_start': {order:62,perTile:1,active:false,group:3},
+			'guild_raids_units_start': {order:64,perTile:1,active:false,group:3},
+			'guild_raids_coins_start': {order:66,perTile:5000,active:true,group:3},
+			'guild_raids_coins_production': {order:68,perTile:1,active:false,group:3},
+			'guild_raids_supplies_start': {order:70,perTile:5000,active:true,group:3},
+			'guild_raids_supplies_production': {order:72,perTile:1,active:false,group:3},
+			'att_boost_attacker-guild_raids': {order:74,perTile:null,active:false,group:3},
+			'def_boost_attacker-guild_raids': {order:76,perTile:null,active:false,group:3},
+			'att_boost_defender-guild_raids': {order:78,perTile:null,active:false,group:3},
+			'def_boost_defender-guild_raids': {order:80,perTile:null,active:false,group:3},
+		}),
+
+
+		cloneData: (data) => JSON.parse(JSON.stringify(data || {})),
+
+		normalizeData: (data) => Object.assign(Productions.Rating.getDefaultData(), Productions.Rating.cloneData(data || {})),
+
+		getActivePreset: () => {
+			const presets = Productions.Rating.Presets;
+			if (!presets?.presets) return null;
+			return presets.presets[presets.activePresetId] || null;
+		},
+
+
+		updateTypes: () => {
+			Productions.Rating.Types = Object.keys(Productions.Rating.Data)
+				.sort((a,b) => {
+					Productions.Rating.Data[a].order - Productions.Rating.Data[b].order
+				});
+		},
+
+
+		savePresets: () => {
+			if (!Productions.Rating.Presets) return;
+			FH.Storage.setItem(Productions.Rating.PresetStorageKey, JSON.stringify(Productions.Rating.Presets));
+		},
+
+		createPreset: (data) => {
+			const presetId = `preset_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,7)}`;
+			Productions.Rating.Presets.presets[presetId] = {
+				data: Productions.Rating.normalizeData(data)
+			};
+			return presetId;
+		},
+
+		deletePreset: (presetId) => {
+			if (!Productions.Rating.Presets?.presets[presetId]) return false;
+			delete Productions.Rating.Presets.presets[presetId];
+			if (Productions.Rating.Presets.activePresetId === presetId) {
+				Productions.Rating.Presets.activePresetId = Object.keys(Productions.Rating.Presets.presets)[0] || null;
+			}
+			return true;
+		},
+
+		ensurePresets: () => {
+			if (Productions.Rating.Presets) return;
+			let stored = FH.Storage.getItem(Productions.Rating.PresetStorageKey);
+			if (stored) {
+				try {
+					Productions.Rating.Presets = JSON.parse(stored);
+				} catch (e) {
+					Productions.Rating.Presets = null;
+				}
+			}
+			if (!Productions.Rating.Presets) {
+				const legacyData = JSON.parse(FH.Storage.getItem(Productions.Rating.LegacyStorageKey)||"{}");
+				const presetId = 'default';
+				Productions.Rating.Presets = {
+					activePresetId: presetId,
+					presets: {
+						[presetId]: {
+							data: Productions.Rating.normalizeData(legacyData)
+						}
+					}
+				};
+				FH.Storage.removeItem(Productions.Rating.LegacyStorageKey);
+				Productions.Rating.savePresets();
+			}
+			if (!Productions.Rating.Presets.presets || Object.keys(Productions.Rating.Presets.presets).length === 0) {
+				const presetId = 'default';
+				Productions.Rating.Presets = {
+					activePresetId: presetId,
+					presets: {
+						[presetId]: {
+							data: Productions.Rating.normalizeData({})
+						}
+					}
+				};
+				Productions.Rating.savePresets();
+			}
+			if (!Productions.Rating.Presets.presets[Productions.Rating.Presets.activePresetId]) {
+				Productions.Rating.Presets.activePresetId = Object.keys(Productions.Rating.Presets.presets)[0];
+				Productions.Rating.savePresets();
+			}
+		},
+
+		setActivePreset: (presetId) => {
+			Productions.Rating.ensurePresets();
+			if (!Productions.Rating.Presets.presets[presetId]) return;
+			Productions.Rating.Presets.activePresetId = presetId;
+			Productions.Rating.savePresets();
+			Productions.Rating.load();
+		},
+
+		resetActivePreset: async () => {
+			const preset = Productions.Rating.getActivePreset();
+			if (!preset) return;
+			preset.data = Productions.Rating.normalizeData({});
+			Productions.Rating.Data = preset.data;
+			Productions.Rating.updateTypes();
+			Productions.Rating.savePresets();
+			await Productions.CalcRatingBody();
+		},
+
+		getPresetOptions: () => {
+			const presets = Productions.Rating.Presets?.presets || {};
+			const activeId = Productions.Rating.Presets?.activePresetId;
+			let listItems = '';
+			let i = 1;
+			for (let [id, preset] of Object.entries(presets)) {
+				listItems += `<li data-id="${id}" ${id === activeId ? 'class="active"' : ''}>${i}</li>`;
+				i++;
+			}
+			return listItems;
+		},
+
+		exportPresets: () => {
+			Productions.Rating.ensurePresets();
+			const payload = {
+				version: 1,
+				activePresetId: Productions.Rating.Presets.activePresetId,
+				presets: Productions.Rating.Presets.presets
+			};
+			const fileName = `EfficiencyRatingPresets_${moment().format('YYMMDD-HHmm')}.json`;
+			FH.Main.ExportFile(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), fileName);
+		},
+
+		importPresets: (file) => {
+			if (!file) return;
+			const reader = new FileReader();
+			reader.onload = (evt) => {
+				try {
+					const data = JSON.parse(evt.target.result);
+					const presets = data?.presets;
+					if (!presets || typeof presets !== 'object') throw new Error('invalid');
+					const importedPresets = {};
+					for (const [id, preset] of Object.entries(presets)) {
+						if (!preset?.data) continue;
+						importedPresets[id] = { data: Productions.Rating.normalizeData(preset.data) };
+					}
+					if (Object.keys(importedPresets).length === 0) throw new Error('empty');
+					Productions.Rating.Presets = {
+						activePresetId: data.activePresetId && importedPresets[data.activePresetId] ? data.activePresetId : Object.keys(importedPresets)[0],
+						presets: importedPresets
+					};
+					Productions.Rating.savePresets();
+					Productions.Rating.load();
+				} catch (e) {
+					alert(FH.t('Boxes.ProductionsRating.PresetImportError'));
+				}
+			};
+			reader.onerror = () => alert(FH.t('Boxes.ProductionsRating.PresetImportError'));
+			reader.readAsText(file);
+		},
+
+
+		load: (overwrite = null) => {
+			Productions.Rating.ensurePresets();
+			const activePreset = Productions.Rating.getActivePreset();
+			let data = overwrite || activePreset?.data || {};
+			Productions.Rating.Data = Productions.Rating.normalizeData(data);
+			if (activePreset) {
+				activePreset.data = Productions.Rating.Data;
+			}
+			Productions.Rating.updateTypes();
+
+			if (FH.Storage.getItem('ProductionRatingProdPerTiles')) {
+				let RatingProdPerTiles = Object.assign({},JSON.parse(FH.Storage.getItem('ProductionRatingProdPerTiles')||"{}"))
+				for (let [type,perTile] of Object.entries(RatingProdPerTiles)) {
+					if (Productions.Rating.Data[type]) Productions.Rating.Data[type].perTile = perTile
+				}
+				FH.Storage.removeItem('ProductionRatingProdPerTiles')
+				Productions.Rating.save()
+			}
+
+			if (Productions.Rating.Data.clan_power) {
+				delete Productions.Rating.Data.clan_power;
+			}
+		},
+
+
+		save:() => {
+			Productions.Rating.ensurePresets();
+			const preset = Productions.Rating.getActivePreset();
+			if (preset) {
+				preset.data = Productions.Rating.Data;
+			}
+			Productions.Rating.savePresets();
+		},
+
+
+		loadModifiers: () => {
+			if (Productions.Rating.ScoreModifiers) return;
+			try {
+				Productions.Rating.ScoreModifiers = JSON.parse(FH.Storage.getItem(Productions.Rating.ScoreModifierStorageKey) || "{}");
+			} catch (e) {
+				Productions.Rating.ScoreModifiers = {};
+			}
+		},
+
+		saveModifiers: () => {
+			FH.Storage.setItem(Productions.Rating.ScoreModifierStorageKey, JSON.stringify(Productions.Rating.ScoreModifiers || {}));
+		},
+
+		getModifier: (entityId) => {
+			Productions.Rating.loadModifiers();
+			return Productions.Rating.ScoreModifiers[entityId] || 0;
+		},
+
+		setModifier: (entityId, value) => {
+			Productions.Rating.loadModifiers();
+			if (!value) delete Productions.Rating.ScoreModifiers[entityId];
+			else Productions.Rating.ScoreModifiers[entityId] = value;
+			Productions.Rating.saveModifiers();
+		}
+	},
+
+	RatingRows: [],
+
+	AdvancedFilter: {
+		StorageKey: 'Productions.RatingAdvancedFilter',
+		State: null,
+		Ops: ['gt','lt','eq'], 
+		OpSymbols: {gt:'>', lt:'<', eq:'='},
+		Sizes: ['length','width'],
+
+		getDefaultState: () => ({
+			open: false,
+			match: 'all',
+			size: {
+				length: {op:'', value:''},
+				width:  {op:'', value:''}
+			},
+			criteria: []
+		}),
+
+		getState: (stored) => {
+			const AF = Productions.AdvancedFilter;
+			let state = AF.getDefaultState();
+			if (!stored || typeof stored !== 'object') return state;
+
+			state.open = !!stored.open;
+			state.match = (stored.match === 'any') ? 'any' : 'all';
+
+			for (let dim of AF.Sizes) {
+				let size = stored.size?.[dim];
+				if (!size) continue;
+				state.size[dim].op = AF.Ops.includes(size.op) ? size.op : '';
+				state.size[dim].value = (size.value === null || size.value === undefined) ? '' : String(size.value);
+			}
+
+			if (Array.isArray(stored.criteria)) {
+				for (let criterion of stored.criteria) {
+					if (!criterion?.type) continue;
+					state.criteria.push({
+						type: String(criterion.type),
+						op: AF.Ops.includes(criterion.op) ? criterion.op : 'gt',
+						value: (criterion.value === null || criterion.value === undefined) ? '' : String(criterion.value)
+					});
+				}
+			}
+			return state;
+		},
+
+		load: () => {
+			const AF = Productions.AdvancedFilter;
+			if (AF.State) return AF.State;
+			let stored = null;
+			try {
+				stored = JSON.parse(FH.Storage.getItem(AF.StorageKey) || 'null');
+			} catch (e) {
+				stored = null;
+			}
+			AF.State = AF.getState(stored);
+			return AF.State;
+		},
+
+
+		save: () => {
+			const AF = Productions.AdvancedFilter;
+			FH.Storage.setItem(AF.StorageKey, JSON.stringify(AF.State || AF.getDefaultState()));
+		},
+
+		getTypes: () => (Productions.Rating.Types || []).filter(type => Productions.Rating.Data?.[type]?.active),
+
+
+		getSelectedFilters: () => {
+			const AF = Productions.AdvancedFilter;
+			return AF.load().criteria
+				.map(criterion => ({type: criterion.type, op: criterion.op, target: parseFloat(criterion.value)}))
+				.filter(criterion => criterion.op && !isNaN(criterion.target));
+		},
+
+		getSelectedSizes: () => {
+			const AF = Productions.AdvancedFilter;
+			let state = AF.load();
+			let active = [];
+			for (let dim of AF.Sizes) {
+				let target = parseFloat(state.size[dim].value);
+				if (state.size[dim].op && !isNaN(target))
+					active.push({dim: dim, op: state.size[dim].op, target: target});
+			}
+			return active;
+		},
+
+
+		value: (row, type) => {
+			let rating = row?.rating;
+			if (!rating) return 0;
+
+			if (Productions.efficiencySettings.tilevalues) {
+				let tileValue = parseFloat(rating[type+'-tile']);
+				if (isNaN(tileValue)) return 0;
+				let roundingFactor = (tileValue > 100 || tileValue < -100) ? 1 : 100;
+				return Math.round(tileValue * roundingFactor) / roundingFactor;
+			}
+
+			let value = parseFloat(rating[type]);
+			return isNaN(value) ? 0 : value;
+		},
+
+
+		test: (value, op, target) => {
+			if (op === 'gt') return value > target;
+			if (op === 'lt') return value < target;
+			if (op === 'eq') return Math.abs(value - target) < 0.005;
+			return true;
+		},
+
+
+		opSelect: (cssClass, selected, extraAttributes = '', allowEmpty = false) => {
+			const AF = Productions.AdvancedFilter;
+			let h = `<select class="${cssClass}" ${extraAttributes}>`;
+			if (allowEmpty)
+				h += `<option value=""${selected === '' ? ' selected' : ''}>-</option>`;
+			for (let op of AF.Ops)
+				h += `<option value="${op}"${selected === op ? ' selected' : ''}>${AF.OpSymbols[op]}</option>`;
+			return h + `</select>`;
+		},
+
+
+		buildTypeMenu: () => {
+			const AF = Productions.AdvancedFilter;
+			let types = AF.getTypes();
+			if (types.length === 0)
+				return `<span class="custom-option af-empty">${FH.t('Boxes.ProductionsRating.AdvancedNoTypes')}</span>`;
+
+			let h = '';
+			for (let type of types)
+				h += `<span class="custom-option" data-type="${type}"><span class="resicon ${type}"></span><span class="af-type-name">${Productions.GetTypeName(type)}</span></span>`;
+			return h;
+		},
+
+
+		buildCriteria: () => {
+			const AF = Productions.AdvancedFilter;
+			let state = AF.load();
+			if (state.criteria.length === 0)
+				return ``;
+
+			let h = '';
+			state.criteria.forEach((criterion, index) => {
+				// type was switched off in the settings after the criterion was created
+				let stale = !Productions.Rating.Data?.[criterion.type]?.active;
+				h += `<span class="af-criterion${stale ? ' af-stale' : ''}" data-index="${index}"`+
+					(stale ? ` data-original-title="${FH.t('Boxes.ProductionsRating.AdvancedStale')}"` : '')+'>';
+				h += `<span class="resicon ${criterion.type}" data-original-title="${Productions.GetTypeName(criterion.type)}"></span>`;
+				h += AF.opSelect('af-op', criterion.op, `data-index="${index}"`);
+				h += `<input type="number" class="af-value" data-index="${index}" step="any" value="${criterion.value}">`;
+				h += `<a class="af-remove game-cursor" data-index="${index}">✕</a>`;
+				h += '</span>';
+			});
+			return h;
+		},
+
+
+		show: () => {
+			const AF = Productions.AdvancedFilter;
+			let state = AF.load();
+			let h = [];
+
+			h.push(`<div id="efficiencyAdvancedFilter" class="advanced-filter${state.open ? ' open' : ''}">
+				<div class="af-group flex gap">
+					<span class="af-group-title">${FH.t('Boxes.ProductionsRating.AdvancedSizes')}</span>
+					<span>
+						${AF.opSelect('af-dim-op', state.size.length.op, `data-dim="length"`, true)}
+						<input type="number" class="af-size-value" data-dim="length" min="1" step="1" value="${state.size.length.value}">
+					</span> <span class="af-group-title">x</span> 
+					<span>
+						${AF.opSelect('af-dim-op', state.size.width.op, `data-dim="width"`, true)}
+						<input type="number" class="af-size-value" data-dim="width" min="1" step="1" value="${state.size.width.value}">
+					</span>
+				</div>
+				<div class="af-group af-values flex gap">
+					<span class="af-group-title">${FH.t('Boxes.ProductionsRating.AdvancedValues')}</span>
+					<span class="custom-select af-type-select">
+						<span class="custom-select__trigger"><span>${FH.t('Boxes.ProductionsRating.AdvancedAddValue')}</span><i class="arrow"></i></span>
+						<span class="custom-options af-type-menu">${AF.buildTypeMenu()}</span>
+					</span>
+					<select class="af-match">
+						<option value="all"${state.match === 'all' ? ' selected' : ''}>${FH.t('Boxes.ProductionsRating.AdvancedMatchAll')}</option>
+						<option value="any"${state.match === 'any' ? ' selected' : ''}>${FH.t('Boxes.ProductionsRating.AdvancedMatchAny')}</option>
+					</select>
+					<span class="af-criteria">${AF.buildCriteria()}</span>
+				</div>
+				<div class="af-group flex gap af-footer">
+					<a class="btn btn-mid af-reset">${FH.t('General.Reset')}</a>
+				</div>
+			</div>`);
+			return h.join('');
+		},
+
+
+		refresh: () => {
+			const AF = Productions.AdvancedFilter;
+			let $panel = $('#efficiencyAdvancedFilter');
+			if ($panel.length === 0) return;
+
+			let state = AF.load();
+			$panel.find('.af-criteria').html(AF.buildCriteria());
+			$panel.find('.af-type-menu').html(AF.buildTypeMenu());
+			$panel.find('.af-match').val(state.match);
+			$panel.find('.af-dim-op').each(function () { $(this).val(state.size[$(this).data('dim')].op); });
+			$panel.find('.af-size-value').each(function () { $(this).val(state.size[$(this).data('dim')].value); });
+			$panel.toggleClass('open', !!state.open);
+
+			let $tooltips = $panel.find('[data-original-title]');
+			if ($tooltips.length) $tooltips.tooltip({container: FH.HTML.tooltipHost($tooltips), html: true});
+
+			AF.apply();
+		},
+
+
+		apply: () => {
+			const AF = Productions.AdvancedFilter;
+			let rows = Productions.RatingRows || [];
+			let sizes = AF.getSelectedSizes();
+			let criteria = AF.getSelectedFilters();
+			let matchAny = AF.load().match === 'any';
+			let isActive = (sizes.length + criteria.length) > 0;
+
+			$('#ProductionsRatingBody .ratinglist tr').each(function () {
+				let row = rows[parseInt(this.dataset.ridx, 10)];
+				let matched = true;
+
+				if (isActive && row) {
+					for (let dimension of sizes) {
+						if (AF.test(row[dimension.dim], dimension.op, dimension.target)) continue;
+						matched = false;
+						break;
+					}
+					if (matched && criteria.length > 0) {
+						matched = matchAny
+							? criteria.some(criterion => AF.test(AF.value(row, criterion.type), criterion.op, criterion.target))
+							: criteria.every(criterion => AF.test(AF.value(row, criterion.type), criterion.op, criterion.target));
+					}
+				}
+
+				this.classList.toggle('hidden', !matched);
+			});
+
+			$('#efficiencyAdvancedToggle').toggleClass('active', isActive)
+				.find('.af-badge').text(isActive ? (sizes.length + criteria.length) : '');
+		},
+
+
+		bind: () => {
+			const AF = Productions.AdvancedFilter;
+			let $body = $('#ProductionsRatingBody');
+			$body.off('.advfilter');
+
+			$body.on('click.advfilter', '#efficiencyAdvancedToggle', function (e) {
+				e.preventDefault();
+				let state = AF.load();
+				state.open = !state.open;
+				AF.save();
+				$('#efficiencyAdvancedFilter').toggleClass('open', state.open);
+			});
+
+			$body.on('click.advfilter', '.af-type-select .custom-select__trigger', function (e) {
+				e.stopPropagation();
+				$(this).closest('.custom-select').toggleClass('dd-open');
+			});
+
+			$body.on('click.advfilter', '.af-type-menu .custom-option[data-type]', function () {
+				let state = AF.load();
+				state.criteria.push({type: $(this).data('type'), op: 'gt', value: ''});
+				AF.save();
+				$body.find('.af-type-select').removeClass('dd-open');
+				AF.refresh();
+			});
+
+			$body.on('click.advfilter', '.af-remove', function () {
+				let state = AF.load();
+				state.criteria.splice(parseInt($(this).data('index'), 10), 1);
+				AF.save();
+				AF.refresh();
+			});
+
+			$body.on('change.advfilter', '.af-op', function () {
+				let criterion = AF.load().criteria[parseInt($(this).data('index'), 10)];
+				if (!criterion) return;
+				criterion.op = $(this).val();
+				AF.save();
+				AF.apply();
+			});
+
+			$body.on('input.advfilter', '.af-value', function () {
+				let criterion = AF.load().criteria[parseInt($(this).data('index'), 10)];
+				if (!criterion) return;
+				criterion.value = $(this).val();
+				AF.save();
+				AF.apply();
+			});
+
+			$body.on('change.advfilter', '.af-match', function () {
+				AF.load().match = ($(this).val() === 'any') ? 'any' : 'all';
+				AF.save();
+				AF.apply();
+			});
+
+			$body.on('change.advfilter', '.af-dim-op', function () {
+				AF.load().size[$(this).data('dim')].op = $(this).val();
+				AF.save();
+				AF.apply();
+			});
+
+			$body.on('input.advfilter', '.af-size-value', function () {
+				AF.load().size[$(this).data('dim')].value = $(this).val();
+				AF.save();
+				AF.apply();
+			});
+
+			$body.on('click.advfilter', '.af-reset', function () {
+				let wasOpen = AF.load().open;
+				AF.State = AF.getDefaultState();
+				AF.State.open = wasOpen;
+				AF.save();
+				AF.refresh();
+			});
+
+			let ratingDoc = $body[0] ? $body[0].ownerDocument : document;
+			$(ratingDoc).off('click.advfiltermenu').on('click.advfiltermenu', (e) => {
+				if ($('#ProductionsRatingBody').length === 0) { $(ratingDoc).off('click.advfiltermenu'); return; }
+				if ($(e.target).closest('.af-type-select').length) return;
+				$('#ProductionsRatingBody .af-type-select').removeClass('dd-open');
+			});
+		}
+	},
+
+
+	init: (ActiveTab = 1) => {
+		if (FH.ActiveMap === 'OtherPlayer') return;
+
+		Productions.ActiveTab = ActiveTab;
+		Productions.PrepareData();
+		Productions.showBox();
+	},
+
+
+	PrepareData: () => {
+		FH.Main.CityBuildingsData = CityBuildings.createBuildings(Object.values(FH.Main.CityMapData))
+		Productions.CombinedCityMapData = FH.Main.CityBuildingsData
+
+		if (CityMap.era_outpost.data) {
+			Productions.CombinedCityMapData = Object.assign({}, Productions.CombinedCityMapData, CityMap.era_outpost.data)
+		}
+
+		// create empty arrays
+		for(let i in Productions.Types) {
+			if (!Productions.Types.hasOwnProperty(i)) continue
+
+			Productions.BuildingsProducts[Productions.Types[i]] = []
+			if (Productions.Types[i] === 'goods') continue
+			Productions.BuildingsProductsGroups[ Productions.Types[i] ] = []
+		}
+
+		Productions.BuildingsAll = Object.values(Productions.CombinedCityMapData)
+		Productions.setChainsAndSets(Productions.BuildingsAll)
+
+		Productions.PopulationSum = 0,
+		Productions.HappinessSum = 0
+
+		Productions.BuildingsAll.forEach(building => {
+			if (building.happiness)
+				Productions.HappinessSum += building.happiness
+			if (building.population && building.population > 0)
+				Productions.PopulationSum += building.population
+		})
+
+		let ProdBonus = 0
+		if (Productions.HappinessSum < Productions.PopulationSum) 
+			ProdBonus = -0.5
+		else if (Productions.HappinessSum < 1.4 * Productions.PopulationSum) 
+			ProdBonus = 0
+		else 
+			ProdBonus = 0.2
+
+		Productions.HappinessBoost = ProdBonus
+		Productions.Boosts['money'] += ProdBonus
+		Productions.Boosts['supplies'] += ProdBonus
+
+		Productions.CategorizeBuildings()
+	},
+
+
+	CategorizeBuildings: () => {
+		Productions.BuildingsAll.forEach(building => {
+			let boosts = Object.keys(Boosts.Sums)
+			let saveBuilding = {id: building.id, entityId: building.entityId}
+
+			boosts.forEach(boost => {
+				Productions.getBoost(building, boost, function(result) { 
+					if (result !== undefined) {
+						if (Productions.BuildingsProducts[boost]) {
+							if (Productions.BuildingsProducts[boost].find(x => x.id === building.id) === undefined)
+								Productions.BuildingsProducts[boost].push(saveBuilding)
+						}
+						if (boost.includes('guild_raids')) {
+							if (Productions.BuildingsProducts.guild_raids.find(x => x.id === building.id) === undefined)
+								Productions.BuildingsProducts.guild_raids.push(saveBuilding)
+						}
+					}
+				})
+			})
+
+			if (building.production) {
+				building.production.forEach(production => {
+					if (production.type === "guildResources") {
+						if (Productions.BuildingsProducts.clan_goods.find(x => x.id === building.id) === undefined)
+							Productions.BuildingsProducts["clan_goods"].push(saveBuilding)
+					}
+					if (production.type === "unit") { 
+						if (Productions.BuildingsProducts.units.find(x => x.id === building.id) === undefined)
+							Productions.BuildingsProducts["units"].push(saveBuilding)
+					}
+					if (production.type === "random") {
+						production.resources.forEach(resource => {
+							if (resource.type === "unit") {
+								if (Productions.BuildingsProducts.units.find(x => x.id === building.id) === undefined)
+									Productions.BuildingsProducts["units"].push(saveBuilding)
+							}
+							if (resource.type === "forgepoint_package" || resource.subType === "forgepoint_package") { // e.g. grilling grove
+								if (Productions.BuildingsProducts.strategy_points.find(x => x.id === building.id) === undefined)
+									Productions.BuildingsProducts["strategy_points"].push(saveBuilding)
+							}
+							if (resource.type === "consumable" || resource.type.includes("chest")) {
+								if (Productions.BuildingsProducts.items.find(x => x.id === building.id) === undefined)
+									Productions.BuildingsProducts["items"].push(saveBuilding)
+							}
+							if (resource.type === "resources" && resource.subType === "strategy_points") {
+								if (Productions.BuildingsProducts.strategy_points.find(x => x.id === building.id) === undefined)
+									Productions.BuildingsProducts["strategy_points"].push(saveBuilding)
+							}
+							if (resource.type === "resources" && resource.subType === "money") {
+								if (Productions.BuildingsProducts.money.find(x => x.id === building.id) === undefined)
+									Productions.BuildingsProducts["money"].push(saveBuilding)
+							}
+							if (resource.type === "resources" && resource.subType === "supplies") {
+								if (Productions.BuildingsProducts.supplies.find(x => x.id === building.id) === undefined)
+									Productions.BuildingsProducts["supplies"].push(saveBuilding)
+							}
+							if (resource.type === "resources" && resource.subType === "medals") { 
+								if (Productions.BuildingsProducts.medals.find(x => x.id === building.id) === undefined)
+									Productions.BuildingsProducts["medals"].push(saveBuilding)
+							}
+							if (resource.type.includes("good") && !resource.type.includes("guild")) {
+								if (Productions.BuildingsProducts.goods.find(x => x.id === building.id) === undefined)
+									Productions.BuildingsProducts["goods"].push(saveBuilding)
+							}
+							if (resource.type.includes("good") && resource.type.includes("guild")) {
+								if (Productions.BuildingsProducts.clan_goods.find(x => x.id === building.id) === undefined)
+									Productions.BuildingsProducts.clan_goods.push(saveBuilding)
+							}
+						})
+					}
+					if (production.type === 'special_goods') {
+						if (Productions.BuildingsProducts.special_goods.find(x => x.id === building.id) === undefined) {
+							Productions.BuildingsProducts["special_goods"].push(saveBuilding)}
+					}
+					if (production.type === "resources") {
+						let types = Object.keys(production.resources)
+						if (production.resources.money) { 
+							if (Productions.BuildingsProducts.money.find(x => x.id === building.id) === undefined)
+								Productions.BuildingsProducts["money"].push(saveBuilding)
+						}
+						if (production.resources.supplies) { 
+							if (Productions.BuildingsProducts.supplies.find(x => x.id === building.id) === undefined)
+								Productions.BuildingsProducts["supplies"].push(saveBuilding)
+						}
+						if (production.resources.medals) { 
+							if (Productions.BuildingsProducts.medals.find(x => x.id === building.id) === undefined)
+								Productions.BuildingsProducts["medals"].push(saveBuilding)
+						}
+						if (production.resources.premium) { 
+							Productions.BuildingsProducts["premium"].push(saveBuilding)
+						}
+						if (production.resources.strategy_points) { 
+							if (Productions.BuildingsProducts.strategy_points.find(x => x.id === building.id) === undefined)
+								Productions.BuildingsProducts["strategy_points"].push(saveBuilding)
+						}
+						if (types.find(x => x.includes('random_good_of_') || x.includes('all_goods_of_'))) {
+							if (Productions.BuildingsProducts.goods.find(x => x.id === building.id) === undefined)
+								Productions.BuildingsProducts["goods"].push(saveBuilding)
+						}
+					}
+					if (production.resources?.type === "consumable") {
+						if (Productions.BuildingsProducts.items.find(x => x.id === building.id) === undefined)
+							Productions.BuildingsProducts["items"].push(saveBuilding)
+					}
+				})
+			}
+			if (building.state.production) {
+				building.state.production.forEach(production => {
+					if (production.type === "guildResources") {
+						if (Productions.BuildingsProducts.clan_goods.find(x => x.id === building.id) === undefined)
+							Productions.BuildingsProducts.clan_goods.push(saveBuilding)
+					}
+					if (production.type === "unit") { 
+						if (Productions.BuildingsProducts.units.find(x => x.id === building.id) === undefined)
+							Productions.BuildingsProducts.units.push(saveBuilding)
+					}
+					if (production.type === "genericReward") {
+						if (Productions.BuildingsProducts.items.find(x => x.id === building.id) === undefined) {
+							Productions.BuildingsProducts.items.push(saveBuilding)
+						}
+					}
+					if (production.type === "resources") {
+						if (production.resources.money) { 
+							if (Productions.BuildingsProducts.money.find(x => x.id === building.id) === undefined)
+							Productions.BuildingsProducts.money.push(saveBuilding)
+						}
+						if (production.resources.supplies) { 
+							if (Productions.BuildingsProducts.supplies.find(x => x.id === building.id) === undefined)
+							Productions.BuildingsProducts.supplies.push(saveBuilding)
+						}
+						if (production.resources.medals) { 
+							if (Productions.BuildingsProducts.medals.find(x => x.id === building.id) === undefined)
+							Productions.BuildingsProducts.medals.push(saveBuilding)
+						}
+						if (production.resources.premium) { 
+							if (Productions.BuildingsProducts.premium.find(x => x.id === building.id) === undefined)
+							Productions.BuildingsProducts.premium.push(saveBuilding)
+						}
+						if (production.resources.strategy_points) { 
+							if (Productions.BuildingsProducts.strategy_points.find(x => x.id === building.id) === undefined)
+							Productions.BuildingsProducts.strategy_points.push(saveBuilding)
+						}
+						Object.keys(production.resources).forEach(name => {
+							let good = FH.Goods.List.find(x => x.id === name)
+							if (good !== undefined) {
+								if (Productions.BuildingsProducts.goods.find(x => x.id === building.id) === undefined)
+									Productions.BuildingsProducts["goods"].push(saveBuilding)
+							}
+						})
+					}
+					if (production.resources?.icon === "next_age_goods") {
+						if (Productions.BuildingsProducts.goods.find(x => x.id === building.id) === undefined)
+							Productions.BuildingsProducts["goods"].push(saveBuilding)
+					}
+				})
+			}
+
+			if (building.happiness !== 0) {
+				Productions.BuildingsProducts["happiness"].push(saveBuilding)
+			}
+			if (building.population !== 0) {
+				Productions.BuildingsProducts["population"].push(saveBuilding)
+			}
+		})
+	},
+
+
+	CalculateProfileData: () => {
+		if (FH.ActiveMap === 'OtherPlayer') return;
+
+		Productions.PrepareData();
+
+		Productions.buildTableByType('strategy_points');
+		Productions.buildTableByType('units');
+		Productions.buildTableByType('goods');
+		Productions.buildTableByType('clan_goods');
+		/*let fspAmount = 0;
+		for (let building of Object.values(Productions.CombinedCityMapData)) {
+			let item = Productions.showBuildingItems(false, building);
+			if (item[2].length > 0) {
+				let fsp = item[2].find(x => x.itemId === "rush_event_buildings_instant");
+				if (fsp) {
+					if (fsp.fragment)
+						fspAmount += (fsp.amount + fsp.random);
+					else
+						fspAmount += (fsp.amount + fsp.random)*30;
+				}
+			}
+		}
+		console.log(fspAmount / 30);*/
+
+		Productions.ProfileDataLoaded = true
+	},
+
+
+	showBox: () => {
+		if ($('#Productions').length > 0){
+			FH.HTML.CloseOpenBox('Productions');
+			return;
+		}
+
+		FH.HTML.AddCssFile('productions');
+
+		FH.HTML.Box({
+			id: 'Productions',
+			title: FH.t('Boxes.Productions.Title'),
+			auto_close: true,
+			dragdrop: true,
+			minimize: true,
+			resize: true,
+			popout: {w: 1000, h: 700},
+        	settings: Productions.ShowSettings
+		});
+
+		Productions.CalcBody();
+		Productions.SwitchFunction();
+	},
+
+	
+	CalcBody: () => {
+		let activeType = Productions.Types[Productions.ActiveTab - 1];
+		let savedState = Productions.GetTabState(activeType); // for when the window is open and building state changes
+
+		Productions.Tabs = [];
+		Productions.TabsContent = [];
+
+		let h = [];
+
+		h.push('<div class="production-tabs tabs">');
+
+		Productions.Types.forEach(type => {
+			Productions.SetTabs(type)
+			Productions.SetTabContent(type, "") // empty content, fill later
+		})
+
+		h.push( Productions.GetTabs() );
+		h.push( Productions.GetTabContent() );
+
+		h.push('</div>');
+
+		$('#Productions').find('#ProductionsBody').html(h.join('')).promise().done(function () {
+			// show the previously active tab with filter&sorting
+			Productions.ShowTab(activeType, savedState);
+
+			$('.production-tabs li').on('click.prodTabs', function (e) {
+				e.preventDefault();
+				let type = $('a', this).attr('href').replace('#', '');
+				Productions.ShowTab(type);
+			});
+
+			$('#Productions').off('click.prodTypeBoost').on('click.prodTypeBoost', '.typeBoost', function (e) {
+				e.preventDefault();
+				let type = $('a', this).attr('href').replace('#', '');
+				Productions.ShowTab(type);
+			});
+
+			// extra functionality
+			$('.production-tabs').tabslet({ active: Productions.ActiveTab })
+
+			// show a building on the map
+			$('#Productions').off('click.prodShowEntity').on('click.prodShowEntity', '.foe-table .show-entity', function () {
+				Productions.ShowOnMap($(this).data('id'));
+			});
+		});
+	},
+
+
+	ShowTab: (type, state) => {
+		Productions.ActiveTab = Productions.Types.findIndex(x => x === type)+1;
+		let content = $(`#Productions #${type}`);
+
+		if (content.html().length === 0) {
+			let html = Productions.buildTableByType(type);
+			content.html(html).promise().done(() => {
+				$('.TSinactive').tableSorter();
+				$('.TSinactive').removeClass('TSinactive');
+				FH.HTML.FilterTable(`#Productions #${type} .filterCurrentList`);
+				Productions.ApplyTabState(type, state);
+			});
+		}
+
+		$('#Productions .content').css('display', 'none');
+		content.css('display', 'block');
+	},
+
+
+	GetTabState: (type) => {
+		if (!type) return null;
+		let content = $(`#Productions #${type}`);
+		if (content.length === 0 || content.html().length === 0) return null;
+
+		let state = { filter: '', sort: null };
+
+		let filterVal = content.find('.filterCurrentList').val();
+		if (filterVal) state.filter = filterVal;
+
+		let sortedTh = content.find('.sorter-header th.ascending, .sorter-header th.descending');
+		if (sortedTh.length) {
+			state.sort = {
+				index: sortedTh.index(),
+				direction: sortedTh.hasClass('ascending') ? 'ascending' : 'descending'
+			};
+		}
+
+		return state;
+	},
+
+
+	ApplyTabState: (type, state) => {
+		if (!state) return;
+		let content = $(`#Productions #${type}`);
+
+		if (state.filter) 
+			content.find('.filterCurrentList').val(state.filter).trigger('keyup');
+
+		if (state.sort) {
+			let th = content.find('.sorter-header th').eq(state.sort.index);
+			if (th.length && !th.hasClass('no-sort') && !th.hasClass(state.sort.direction)) {
+				th.trigger('click');
+				if (!th.hasClass(state.sort.direction)) th.trigger('click');
+			}
+		}
+	},
+
+
+	setChainsAndSets(buildings) {
+		if (buildings === undefined) buildings = Object.values(FH.Main.CityBuildingsData)
+		let idsToRemove = [];
+
+		for (const building of buildings) {
+			if (building?.setBuilding !== undefined) {
+				let adjacentIds = CityBuildings.findAdjacentSetBuildingByCoords(building);
+				let uniqueAdjacentEntities = new Set();
+				for (let id of adjacentIds) {
+					let adjB = CityBuildings.getBuildingById(id);
+					if (adjB) uniqueAdjacentEntities.add(adjB.entityId);
+				}
+				building.setBuilding.uniqueAdjacentCount = uniqueAdjacentEntities.size;
+			} 
+			else if (building?.chainBuilding !== undefined && building?.chainBuilding?.type === "start") {
+
+				let linkedBuildings = CityBuildings.hasLinks(building);
+				if (linkedBuildings.length > 1) {
+					CityBuildings.createChainedBuilding(linkedBuildings);
+
+					for (const link of linkedBuildings) {
+						if (link.chainBuilding.type === 'linked') {
+							idsToRemove.push(link.id);
+						}
+					}
+				}
+			}
+		}
+
+		if (idsToRemove.length > 0) {
+			Productions.BuildingsAll = Productions.BuildingsAll.filter(b => !idsToRemove.includes(b.id));
+		}
+	},
+
+	
+	buildQITable(type) {
+		let table = [],
+		tableGr = [],
+		rowA = [],
+		boostCounter = {},
+		boosts = {},
+		buildingIds = Productions.BuildingsProducts[type]
+
+		buildingIds.forEach(b => {
+			let building = CityBuildings.getBuildingById(b.id)
+			if (building.player_id === FH.Player.ID && building.state.connected) {
+			rowA.push('<tr>')
+			rowA.push('<td class="text-center">')
+				rowA.push((building.state.isPolivated !== undefined ? (building.state.isPolivated ? srcLinks.icons('when_motivated') : '☆') : ''))
+				if (building.setBuilding !== undefined)
+					rowA.push('<img src="' + srcLinks.get('/shared/icons/' + building.setBuilding.name + '.png', true) + '" class="chain-set-ico">')
+				if (building.chainBuilding !== undefined)
+					rowA.push('<img src="' + srcLinks.get('/shared/icons/' + building.chainBuilding.name + '.png', true) + '" class="chain-set-ico">')
+			rowA.push('</td>')
+			rowA.push('<td data-meta_id="'+building.entityId+'" data-eff="'+building.rating.totalScore * 100+'" data-era="'+(building.eraName==="AllAge"?"":building.eraName)+'" data-callback_tt="building" data-text="'+FH.helper.str.cleanup(building.name)+'" class="helperTT ' + (FH.Main.Allies.buildingList?.[building.id]?"ally" : "") +'">' + building.name + '</td>')
+
+			if (building.boosts !== undefined) {
+				boosts = {}
+				building.boosts.forEach(boost => {
+					if (boost.type.find(x => x.includes('guild_raids_'))) {
+						if (boosts[boost.type[0]] === undefined) 
+							boosts[boost.type[0]] = parseInt(boost.value)
+						else
+							boosts[boost.type[0]] += parseInt(boost.value)
+
+						if (boostCounter[boost.type[0]] === undefined) 
+							boostCounter[boost.type[0]] = parseInt(boost.value)
+						else
+						boostCounter[boost.type[0]] += parseInt(boost.value)
+					}
+				})
+				for (let type of Object.keys(Boosts.Sums)) {
+					if (type.includes('guild_raids_')) {
+						if (boosts[type] !== undefined)
+							rowA.push('<td data-number="'+boosts[type]+'" class="text-center">'+ FH.HTML.Format(boosts[type]) +'</td>')
+						else
+							rowA.push('<td data-number="'+0+'" class="text-center">-</td>')
+					}
+				}
+			}
+
+			rowA.push('<td data-number="'+Technologies.Eras[building.eraName]+'">' + FH.t("Eras."+Technologies.Eras[building.eraName]+".short") + '</td>')
+			rowA.push('<td class="text-right">')
+			rowA.push('<span class="show-entity" data-id="' + building.id + '"><img class="game-cursor" alt="" src="' + FH.extUrl + 'images/hud/open-eye.png"></span>')
+			rowA.push('</td>')
+			rowA.push('</tr>')
+			}
+		})
+
+		if (rowA.length > 0) {
+			table.push('<table id="'+type+'-list" class="foe-table sortable-table TSinactive '+type+'-list active exportable">')
+			table.push('<thead class="sticky">')
+			table.push('<tr>')
+			table.push('<th colspan="12"><input id="'+type+'-listfilter" type="search" placeholder="' + FH.t('Boxes.Productions.FilterTable') + '" class="filterCurrentList">' +
+				'<span class="btn" onclick="Productions.createBuildingBoostList([\'guild_raids_action_points_collection\',\'guild_raids_coins_production\',\'guild_raids_coins_start\',\'guild_raids_supplies_production\',\'guild_raids_supplies_start\',\'guild_raids_goods_start\',\'guild_raids_units_start\'])">'+FH.t("Boxes.BoostList.open")+'</span></th>')
+			table.push('</tr>')
+
+			table.push('<tr class="sorter-header exportheader">')
+			table.push('<th class="no-sort tdmin" data-type="prodlist'+type+'"> </th>')
+			table.push('<th class="ascending" data-type="prodlist'+type+'" data-export="' + FH.t('Boxes.BlueGalaxy.Building') + '">' + FH.t('Boxes.BlueGalaxy.Building') + '</th>')
+			table.push('<th class="boost qiactions is-number text-center" data-type="prodlist'+type+'"><span></span>'+(boostCounter.guild_raids_action_points_collection || 0)+'</th>')
+			table.push('<th class="boost qicapacity is-number text-center" data-type="prodlist'+type+'"><span></span>'+(boostCounter.guild_raids_action_points_capacity || 0)+'</th>')
+			table.push('<th class="boost qicoins is-number text-center" data-type="prodlist'+type+'"><span></span>'+(boostCounter.guild_raids_coins_production || 0)+'%</th>')
+			table.push('<th class="boost qicoins_start is-number text-center" data-type="prodlist'+type+'"><span></span>'+(boostCounter.guild_raids_coins_start || 0)+'</th>')
+			table.push('<th class="boost qisupplies is-number text-center" data-type="prodlist'+type+'"><span></span>'+(boostCounter.guild_raids_supplies_production || 0)+'%</th>')
+			table.push('<th class="boost qisupplies_start is-number text-center" data-type="prodlist'+type+'"><span></span>'+(boostCounter.guild_raids_supplies_start || 0)+'</th>')
+			table.push('<th class="boost qigoods_start is-number text-center" data-type="prodlist'+type+'"><span></span>'+(boostCounter.guild_raids_goods_start || 0)+'</th>')
+			table.push('<th class="boost qiunits_start is-number text-center" data-type="prodlist'+type+'"><span></span>'+(boostCounter.guild_raids_units_start || 0)+'</th>')
+			table.push('<th data-type="prodlist'+type+'" class="is-number">' + FH.t('Boxes.Productions.Headings.era') + '</th>')
+			table.push('<th data-type="prodlist'+type+'" class="no-sort"> </th>')
+			table.push('</tr>')
+			table.push('</thead>')
+			table.push('<tbody class="prodlist'+type+'">')
+			table.push( rowA.join('') )
+			table.push('</tbody>')
+			table.push('</table>')
+
+			//tableGr = Productions.buildGroupedTable(type, groupedBuildings, boostCounter)
+		}
+		else {
+			table.push('<div class="empty-list">'+FH.t('Boxes.Productions.EmptyList')+'</div>')
+		}
+		
+		return table.join('') + tableGr.join('')
+	},
+
+
+	buildTableByType(type) {
+		let table = [],
+			tableGr = [],
+			tableSum=[],
+			rowA = [],
+			groupedBuildings = [],
+			boostCounter = {'att_boost_attacker': {all: 0, battleground: 0, guild_expedition: 0, guild_raids: 0},
+			'def_boost_attacker': {all: 0, battleground: 0, guild_expedition: 0, guild_raids: 0},
+			'att_boost_defender': {all: 0, battleground: 0, guild_expedition: 0, guild_raids: 0},
+			'def_boost_defender': {all: 0, battleground: 0, guild_expedition: 0, guild_raids: 0}},
+			typeCurrentSum = 0,
+			typeSum = 0,
+			currentAmount = 0,
+			amount = 0,
+			hasRandomProductions = false,
+			boosts = {},
+			buildingIds = Productions.BuildingsProducts[type],
+			inADay = Math.floor(Date.now() / 1000) + 86400,
+			Sum = {},
+			content = ''
+
+			if (type !== 'goods' && type !== 'clan_goods' && type !== 'guild_raids') {
+				for (const b of buildingIds) {
+					let building = CityBuildings.getBuildingById(b.id);
+					if (building?.player_id !== FH.Player.ID || !building.state.connected) continue;
+					// makes random productions with resources and others disappear from the item list
+					if (type === 'items' && Productions.showBuildingItems(true, building)[0] === "" || building.chainBuilding?.type === "linked") continue;
+
+					rowA.push('<tr>')
+					rowA.push('<td class="text-center">')
+						rowA.push((building.state.isPolivated !== undefined ? (building.state.isPolivated ? srcLinks.icons('when_motivated') : '☆') : ''))
+						if (building.setBuilding !== undefined)
+						rowA.push('<img src="' + srcLinks.get('/shared/icons/' + building.setBuilding.name + '.png', true) + '" class="chain-set-ico">')
+						if (building.chainBuilding !== undefined)
+						rowA.push('<img src="' + srcLinks.get('/shared/icons/' + building.chainBuilding.name + '.png', true) + '" class="chain-set-ico">')
+					rowA.push('</td>')
+					rowA.push('<td data-text="'+FH.helper.str.cleanup(building.name)+'" exportvalue="'+building.name+'"><span data-meta_id="'+building.entityId+'" data-eff="'+building.rating?.totalScore * 100+'" data-era="'+(building.eraName==="AllAge"?"":building.eraName)+'" data-callback_tt="building" class="helperTT ' + (FH.Main.Allies.buildingList?.[building.id]?"ally" : "") +'">' + building.name + '</span></td>')
+
+					if (!type.includes('att') && !type.includes('def')) {
+						if (type !== 'items') {
+							let currentProductionByCategory = Productions.getBuildingProductionByCategory(true, building, type)
+							let generalProductionByCategory = Productions.getBuildingProductionByCategory(false, building, type)
+							currentAmount = parseFloat(currentProductionByCategory.amount)
+							amount = parseFloat(generalProductionByCategory.amount)
+							hasRandomProductions = generalProductionByCategory.hasRandomProductions
+							let doubled = generalProductionByCategory.doubleWhenMotivated
+
+							if (type === 'money' && building.isBoostable) {
+								amount = Math.round(amount + (amount * ((Boosts.Sums.coin_production + (Productions.HappinessBoost * 100)) / 100))) * (doubled ? 2 : 1)
+								currentAmount = Math.round(currentAmount + (currentAmount * ((Boosts.Sums.coin_production + (Productions.HappinessBoost * 100)) / 100)))
+							}
+							else if (type === 'supplies' && building.isBoostable) {
+								amount = Math.round(amount + (amount * ((Boosts.Sums.supply_production + (Productions.HappinessBoost * 100)) / 100))) * (doubled ? 2 : 1)
+								currentAmount = Math.round(currentAmount + (currentAmount *((Boosts.Sums.supply_production + (Productions.HappinessBoost * 100)) / 100)))
+							}
+							else if (type === 'strategy_points' && building.isBoostable) {
+								amount = Math.round(amount + (amount *((Boosts.Sums.forge_points_production) / 100)))
+								currentAmount = Math.round(currentAmount + (currentAmount *((Boosts.Sums.forge_points_production) / 100)))
+							}
+							else if (type === 'medals' && building.isBoostable) {
+								amount = Math.round(amount + (amount *((Boosts.Sums.medal_production) / 100)))
+								currentAmount = Math.round(currentAmount + (currentAmount *((Boosts.Sums.medal_production) / 100)))
+							}
+
+							rowA.push('<td data-number="'+amount+'" exportvalue="'+amount+'" class="textright">')
+							let parsedCurrentAmount = (currentAmount >= 10000 ? FH.HTML.FormatNumberShort(currentAmount) : FH.HTML.Format(currentAmount)) 
+							let parsedAmount = (currentAmount >= 10000 ? FH.HTML.FormatNumberShort(amount) : FH.HTML.Format(amount)) 
+
+							if (generalProductionByCategory.units.length>0 || currentProductionByCategory.units.length>0) {
+								if (currentProductionByCategory.units.length > 0) 
+									rowA.push(currentProductionByCategory.units.map(x=>`${x.amount}<span class="unit_skill ${x.type} ${x.era>FH.CurrentEraID?"next_era":""}" title="${FH.t("Boxes.Units." + x.type)}"></span> `).join(" "))
+								else 
+									rowA.push(" - ")
+									rowA.push(" / ")
+
+								if (generalProductionByCategory.units.length > 0) 
+									rowA.push(generalProductionByCategory.units.map(x=>`${x.amount?x.amount:""}${x.amount && x. random ? "+":""}${x.random ? "Ø"+x.random:""}<span class="unit_skill ${x.type} ${x.era>FH.CurrentEraID?"next_era":""}" title="${FH.t("Boxes.Units." + x.type)}"></span> `).join(" "))
+								else 
+									rowA.push(" - ")
+							} else {
+
+								if (currentAmount < amount && building.type !== 'production')
+									rowA.push(parsedCurrentAmount + ' / ' + (hasRandomProductions ? 'Ø' : '') + parsedAmount)
+								else {
+									unitType = currentProductionByCategory.type
+									if (unitType !== null){
+										rowA.push('<span class="unit_skill ' + unitType.replace(/next./,"") + '" title="'+ FH.t("Boxes.Units." + unitType.replace(/next./,"") ) + '"></span> ')
+									}
+									rowA.push(parsedCurrentAmount)
+								}
+							}
+							rowA.push('</td>')
+
+							typeSum += amount
+							typeCurrentSum += currentAmount
+
+							for (let u of generalProductionByCategory.units) {
+								if (u.type.includes("next")) {
+									a=a+1
+								}
+								let n = (u.type !== "rogue" ? u.era : "") + u.type;
+								if (Sum[n]) {
+									if(!Sum[n].theory) {
+										Sum[n].theory=u
+									} else {
+									Sum[n].theory.amount += u.amount || 0
+									Sum[n].theory.random += u.random || 0	
+									}
+								} else {
+									Sum[n] = {current:null,theory:u}
+								}
+							}
+							for (let u of currentProductionByCategory.units) {
+								if (u.type.includes("next")) {
+									a=a+1
+								}
+								let n = (u.type !== "rogue" ? u.era : "") + u.type;
+								if (Sum[n]?.current) {
+									Sum[n].current.amount += u.amount || 0
+									Sum[n].current.random += u.random || 0
+								} else {
+									if (!Sum[n]) Sum[n] = {current:null,theory:null}
+									Sum[n].current = u
+								}
+							}
+
+						}
+						else {
+							let items=Productions.showBuildingItems(true, building);
+							let amount = 0;
+							for (let i of items[2]) {
+								let n = (i.fragment ? "Fragment" : "") + i.name.replace(/\s/g,"")
+								if (Sum[n]) {
+									Sum[n].amount += i.amount || 0
+									Sum[n].random += i.random || 0
+								} else {
+									Sum[n] = i
+								}
+								amount += i.random + i.amount;
+							}
+							let itemsText = items[0];
+
+							rowA.push(`<td data-number="${amount}" exportvalue="${jQuery(itemsText).text()}"><span>${itemsText}</span></td>`);
+						}
+					}
+					else {
+						if (building.boosts !== undefined) {
+							boosts = {
+								all: 0,
+								battleground: 0,
+								guild_expedition: 0,
+								guild_raids: 0
+							}
+							building.boosts.forEach(boost => {
+								if (boost.isMultiplier) return // percentage of the total (e.g. GB bonus), not a flat value
+								if (boost.type.find(x => x === type) === type) {
+									if (boost.feature === "all") {
+										boosts.all += boost.value
+										boostCounter[type][boost.feature] += boost.value
+									}
+									if (boost.feature === "battleground") {
+										boosts.battleground += boost.value
+										boostCounter[type][boost.feature] += boost.value
+									}
+									if (boost.feature === "guild_expedition") {
+										boosts.guild_expedition += boost.value
+										boostCounter[type][boost.feature] += boost.value
+									}
+									if (boost.feature === "guild_raids") {
+										boosts.guild_raids += boost.value
+										boostCounter[type][boost.feature] += boost.value
+									}
+								}
+							})
+
+							rowA.push('<td data-number="'+boosts.all+'" exportvalue="'+boosts.all+'" class="text-center">'+ (boosts.all !== 0 ? FH.HTML.Format(boosts.all) : '-') +'</td>')
+							rowA.push('<td data-number="'+boosts.battleground+'" exportvalue="'+boosts.battleground+'" class="text-center">'+ (boosts.battleground !== 0 ? FH.HTML.Format(boosts.battleground) : '-') +'</td>')
+							rowA.push('<td data-number="'+boosts.guild_expedition+'" exportvalue="'+boosts.guild_expedition+'" class="text-center">'+ (boosts.guild_expedition !== 0 ? FH.HTML.Format(boosts.guild_expedition) : '-') +'</td>')
+							rowA.push('<td data-number="'+boosts.guild_raids+'" exportvalue="'+boosts.guild_raids+'" class="text-center">'+ (boosts.guild_raids !== 0 ? FH.HTML.Format(boosts.guild_raids) : '-') +'</td>')
+						}
+					}
+
+					let updateGroup = groupedBuildings.find(x => x.building.name === building.name)
+					if (updateGroup === undefined) {
+						groupedBuildings.push({
+							building: building,
+							amount: 1,
+							currentValues: currentAmount,
+							values: amount,
+							boosts: boosts,
+							hasRandomProductions: hasRandomProductions,
+						})
+					}
+					else {
+						updateGroup.amount++
+						updateGroup.currentValues += currentAmount
+						updateGroup.values += amount
+					}
+
+					rowA.push('<td '+((type.includes('att') || type.includes('def')) ? 'colspan="3"' : '')+' data-number="'+Technologies.Eras[building.eraName]+'" exportvalue="'+FH.t("Eras."+Technologies.Eras[building.eraName]+".short")+'">' + FH.t("Eras."+Technologies.Eras[building.eraName]+".short") + '</td>')
+					if (!type.includes('att') && !type.includes('def')) {
+						let time = "-"
+						let showRelativeProductionTime = JSON.parse(FH.Storage.getItem('productionsShowRelativeTime')||"false")
+						let showAMPMTime = JSON.parse(FH.Storage.getItem('productionsShowAMPMTime')||"false")
+						if (building.state.times?.at) {
+							if (showRelativeProductionTime)
+								time = moment.unix(building.state.times?.at).fromNow()
+							else if (showAMPMTime)
+								time = moment.unix(building.state.times?.at).format('LTS')
+							else {
+								if (building.state.times?.at <= inADay)
+									time = moment.unix(building.state.times?.at).format('HH:mm:ss') 
+								else
+									time = moment.unix(building.state.times?.at).format('dddd, HH:mm')
+							}
+						}
+						let done = (building.state.name === 'collectable' ? FH.t('Boxes.Productions.Done') : '')
+						rowA.push('<td style="white-space:nowrap" data-date="' + (building.state.times?.at||9999999999) + '">' + (done==""? time : '<b class="text-success">'+done+'</b>') + '</td>')
+					}
+					rowA.push('<td class="text-right">')
+					rowA.push('<span class="show-entity" data-id="' + building.id + '"><img class="game-cursor" src="' + FH.extUrl + 'images/hud/open-eye.png"></span>')
+					rowA.push('</td>')
+					rowA.push('</tr>')
+				}
+			}
+
+			if (rowA.length > 0) {
+				table.push('<table id="'+type+'-list" class="foe-table sortable-table TSinactive '+type+'-list active exportable">')
+				table.push('<thead class="sticky">')
+				table.push('<tr>')
+				table.push('<th colspan="3"><span class="btn btn-mid change-view game-cursor" data-type="' + type + '">' + FH.t('Boxes.Productions.ModeGroups') + '</span> <input id="'+type+'-listfilter" type="search" placeholder="' + FH.t('Boxes.Productions.FilterTable') + '" class="filterCurrentList"></th>')
+				if (!type.includes('att') && !type.includes('def') && type!='items') {
+					table.push('<th colspan="3" class="textright">')
+					table.push((typeCurrentSum >= 10000 ? FH.HTML.FormatNumberShort(typeCurrentSum) : FH.HTML.Format(typeCurrentSum))+ "/" + (typeSum >= 10000 ? FH.HTML.FormatNumberShort(typeSum) : FH.HTML.Format(typeSum)))
+					if (type === 'strategy_points') {
+						table.push(' <button class="typeBoost btn btn-slim"><a href="#forge_points_production" class="game-cursor">'+FH.t('General.Boost')+': '+Boosts.Sums.forge_points_production+'%</a></button>')
+						Profile.fpProduction = typeSum;
+						Profile.update();
+					}
+					else if (type === 'money') {
+						table.push(' <button class="typeBoost btn btn-slim"><a href="#coin_production" class="game-cursor">'+FH.t('General.Boost')+': '+Boosts.Sums.coin_production+'%</a></button>')
+					}
+					else if (type === 'supplies') {
+						table.push(' <button class="typeBoost btn btn-slim"><a href="#supply_production" class="game-cursor">'+FH.t('General.Boost')+': '+Boosts.Sums.supply_production+'%</a></button>')
+					}
+					else if (type === 'special_goods') {
+						table.push(' <button class="typeBoost btn btn-slim"><a href="#special_goods_production" class="game-cursor">'+FH.t('General.Boost')+': '+Boosts.Sums.special_goods_production+'%</a></button>')
+					}
+					else if (type === 'medals') {
+						table.push(' <button class="typeBoost btn btn-slim"><a href="#medal_production" class="game-cursor">'+FH.t('General.Boost')+': '+Boosts.Sums.medal_production+'%</a></button>')
+					}
+					if (type === 'units') {
+						Profile.units = typeSum;
+						Profile.update();
+					}
+					table.push('</th>')
+				}
+				else {
+					table.push('<th colspan="8" class="textright">'+(type=="items" ? '<span class="btn btn-mid" onclick="Productions.showItemSources(event)" style="float:right;">'+FH.t('Boxes.ItemSources.Title')+'</span>' : '')+'</th>')
+				}
+				table.push('</tr>')
+
+				table.push('<tr class="sorter-header exportheader">')
+
+				table.push('<th class="no-sort tdmin" data-type="prodlist'+type+'"> </th>')
+				table.push('<th class="ascending" data-type="prodlist'+type+'" data-export="' + FH.t('Boxes.BlueGalaxy.Building') + '">' + FH.t('Boxes.BlueGalaxy.Building') + '</th>')
+
+				if (!type.includes('att') && !type.includes('def')) 
+					table.push('<th data-type="prodlist'+type+'" class="is-number" data-export="' + FH.t('Boxes.Productions.Headings.number') + '">' + FH.t('Boxes.Productions.Headings.number') + '</th>')
+				else {
+					table.push('<th class="boost '+type+' is-number text-center" data-type="prodlist'+type+'" data-export="'+boostCounter[type].all+'"><span></span>'+boostCounter[type].all+'</th>')
+					table.push('<th class="boost battleground is-number text-center" data-type="prodlist'+type+'" data-export="'+boostCounter[type].battleground+'"><span></span>'+(boostCounter[type].battleground)+'</th>')
+					table.push('<th class="boost guild_expedition is-number text-center" data-type="prodlist'+type+'" data-export="'+boostCounter[type].guild_expedition+'"><span></span>'+(boostCounter[type].guild_expedition)+'</th>')
+					table.push('<th class="boost guild_raids is-number text-center" data-type="prodlist'+type+'" data-export="'+boostCounter[type].guild_raids+'"><span></span>'+boostCounter[type].guild_raids+'</th>')
+				}
+
+				table.push('<th data-type="prodlist'+type+'" class="is-number" data-export="' + FH.t('Boxes.Productions.Headings.era') + '">' + FH.t('Boxes.Productions.Headings.era') + '</th>')
+
+				if (!type.includes('att') && !type.includes('def')) {
+					table.push('<th class="is-date" data-type="prodlist'+type+'">' + FH.t('General.Collection') + '</th>')
+				}
+				table.push('<th data-type="prodlist'+type+'" class="no-sort" '+((type.includes('att') || type.includes('def')) ? 'colspan="3"' : '')+'> </th>')
+				table.push('</tr>')
+				table.push('</thead>')
+				table.push('<tbody class="prodlist'+type+'">')
+				table.push( rowA.join('') )
+				table.push('</tbody>')
+				table.push('</table>')
+
+				tableGr = Productions.buildGroupedTable(type, groupedBuildings, boostCounter)
+				tableSum = Productions.buildSumTable(type,Sum)
+			}
+			else {
+				table.push('<div class="empty-list">'+FH.t('Boxes.Productions.EmptyList')+'</div>')
+			}
+			content = table.join('') + tableGr.join('') + tableSum.join('')
+			if (type === 'goods')
+				content = Productions.buildGoodsTable(buildingIds, type) // goods have their own table
+			if (type === 'clan_goods')
+				content = Productions.buildGuildGoodsTable(buildingIds, type)
+			if (type === 'guild_raids')
+				content = Productions.buildQITable(type) 
+
+			return content
+	},
+
+
+	getRelevantGoodsByEra: (buildingIds, guildGoods = false) => {
+		let eras = [];
+		for (const b of buildingIds) {
+			let building = CityBuildings.getBuildingById(b.id);
+			if (building.player_id !== FH.Player.ID) continue;
+			
+			let allGoods = {};
+			if (guildGoods)
+				allGoods = CityBuildings.getBuildingGuildGoodsByEra(false, building, true);
+			else
+				allGoods = CityBuildings.getBuildingGoodsByEra(false, building, true);
+
+			if (allGoods === undefined) continue;
+
+			for (const [era, value] of Object.entries(allGoods.eras)) {
+				if (eras.find(x => x == era) == undefined)
+					eras.push(parseInt(era));
+			}
+		}
+		
+		// sort by the most advanced era first
+		eras.sort((a, b) => {
+			if (a < b) return 1;
+			if (a > b) return -1;
+			return 0;
+		});
+
+		return eras;
+	},
+
+
+	buildGoodsTable: (buildingIds, type = "goods") => {
+		let table = [],
+			rowB = [],
+			rowA = [],
+			groupedBuildings = [],
+			eras = [],
+			erasCurrent = {},
+			erasTotal = {},
+			inADay = Math.floor(Date.now() / 1000) + 86400
+
+		// gather all different eras
+		eras = Productions.getRelevantGoodsByEra(buildingIds);
+
+		// prepare array with total number of goods for each era
+		for (const era of eras) {
+			erasCurrent[era] = 0
+			erasTotal[era] = 0
+		}
+
+		// single view table content
+		for (const b of buildingIds) {
+			let building = CityBuildings.getBuildingById(b.id);
+			if (building.player_id !== FH.Player.ID || !building.state.connected) continue;
+
+			rowA.push('<tr>')
+			rowA.push('<td class="text-center">')
+			rowA.push((building.state.isPolivated !== undefined ? (building.state.isPolivated ? srcLinks.icons('when_motivated') : '☆') : ''))
+			rowA.push('</td>')
+			rowA.push('<td data-text="'+FH.helper.str.cleanup(building.name)+'"><span data-meta_id="'+building.entityId+'" data-eff="'+building.rating?.totalScore * 100+'" data-era="'+(building.eraName==="AllAge"?"":building.eraName)+'" data-callback_tt="building" class="helperTT ' + (FH.Main.Allies.buildingList?.[building.id]?"ally" : "") +'">' + building.name + '</span></td>')
+
+			// prepare grouped buildings
+			let updateGroup = groupedBuildings.find(x => x.building.name === building.name)
+			if (updateGroup === undefined) {
+				let gBuilding = {
+					building: building,
+					amount: 1,
+				}
+				for (let era of eras) {
+					gBuilding[era] = 0
+				}
+				updateGroup = gBuilding
+				groupedBuildings.push(gBuilding)
+			}
+			else {
+				updateGroup.amount++
+			}
+
+			let currentGoods = Productions.getBuildingProductionByCategory(true, building, type)
+			let allGoods = Productions.getBuildingProductionByCategory(false, building, type)
+
+			for (const era of eras) {
+				let currentGoodAmount = 0
+				let goodAmount = 0
+				if (allGoods !== undefined) {
+					erasCurrent[era] += currentGoodAmount = currentGoods?.eras?.[era] || 0
+					erasTotal[era] += goodAmount = allGoods?.eras?.[era] || 0
+					updateGroup[era] += goodAmount
+				}
+				if (building.isBoostable) {
+					goodAmount = Math.round(goodAmount)
+					currentGoodAmount = Math.round(currentGoodAmount)
+				}
+				rowA.push('<td data-number="'+goodAmount+'" class="text-center">')
+					if (currentGoodAmount !== goodAmount) {
+						let isAverage = (allGoods.hasRandomProduction ? "Ø" : "")
+						rowA.push(FH.HTML.Format(currentGoodAmount)+'/'+isAverage+FH.HTML.Format(goodAmount))
+					}
+					else
+						rowA.push(FH.HTML.Format(goodAmount))
+				rowA.push('</td>')
+			}
+
+			rowA.push('<td data-number="'+Technologies.Eras[building.eraName]+'">' + FH.t("Eras."+Technologies.Eras[building.eraName]+".short") + '</td>')
+			let time = "-"
+			let showRelativeProductionTime = JSON.parse(FH.Storage.getItem('productionsShowRelativeTime')||"false")
+			let showAMPMTime = JSON.parse(FH.Storage.getItem('productionsShowAMPMTime')||"false")
+			if (building.state.times?.at) {
+				if (showRelativeProductionTime)
+					time = moment.unix(building.state.times?.at).fromNow()
+				else if (showAMPMTime)
+					time = moment.unix(building.state.times?.at).format('LTS')
+				else {
+					if (building.state.times?.at <= inADay)
+						time = moment.unix(building.state.times?.at).format('HH:mm:ss') 
+					else
+						time = moment.unix(building.state.times?.at).format('dddd, HH:mm')
+				}
+			}
+			let done = (building.state.name === 'collectable' ? FH.t('Boxes.Productions.Done') : '')
+			rowA.push('<td style="white-space:nowrap" data-date="' + (building.state.times?.at||9999999999) + '">' + (done==""? time : '<b class="text-success">'+done+'</b>') + '</td>')
+			rowA.push('<td class="text-right">')
+			rowA.push('<span class="show-entity" data-id="' + building.id + '"><img class="game-cursor" src="' + FH.extUrl + 'images/hud/open-eye.png"></span>')
+			rowA.push('</td>')
+			rowA.push('</tr>')
+		}
+
+		Profile.goods = erasTotal;
+		Profile.update();
+
+		// single view table
+		table.push('<table id="'+type+'-list" class="foe-table sortable-table exportable TSinactive '+type+'-list active">')
+		table.push('<thead class="sticky">')
+		table.push('<tr>')
+		table.push('<th colspan="5"><span class="btn btn-mid change-view game-cursor" data-type="' + type + '">' + FH.t('Boxes.Productions.ModeGroups') + '</span> <input type="text" placeholder="' + FH.t('Boxes.Productions.FilterTable') + '" class="filterCurrentList"></th>')
+		table.push(`<th colspan=${eras.length+1} class="textright">${FH.HTML.Format(Object.values(erasCurrent).reduce((a,b)=>a+b))}/${FH.HTML.Format(Object.values(erasTotal).reduce((a,b)=>a+b))} 	<button class="typeBoost btn btn-slim"><a href="#goods_production" class="game-cursor">${FH.t('General.Boost')}: ${Boosts.Sums.goods_production}%</a></button> </th>`)
+		table.push('</tr>')
+
+		table.push('<tr class="sorter-header exportheader">')
+		table.push('<th class="no-sort tdmin" data-type="prodlist'+type+'"> </th>')
+		table.push('<th class="ascending" data-type="prodlist'+type+'">' + FH.t('Boxes.BlueGalaxy.Building') + '</th>')
+		for (const era of eras) {
+			table.push('<th data-type="prodlist'+type+'" class="is-number text-center"><span data-original-title="'+FH.t('Eras.'+(parseInt(era)+1))+'">' + FH.t('Eras.'+(parseInt(era)+1)+'.short') + '<br><small>'+FH.HTML.Format(erasCurrent[era])+'/'+FH.HTML.Format(erasTotal[era])+'</small></span></th>')
+		}
+		table.push('<th data-type="prodlist'+type+'" class="is-number">' + FH.t('Boxes.Productions.Headings.era') + '</th>')
+		table.push('<th data-type="prodlist'+type+'" class="is-date">'+FH.t('General.Collection')+'</th>')
+		table.push('<th data-type="prodlist'+type+'" class="no-sort"> </th>')
+		table.push('</tr>')
+		table.push('</thead>')
+		table.push('<tbody class="prodlist'+type+'">')
+		table.push( rowA.join('') )
+		table.push('</tbody>')
+		table.push('</table>')
+
+
+		// grouped view
+		table.push('<table class="foe-table sortable-table TSinactive '+type+'-group">')
+		table.push('<thead class="sticky">')
+		table.push('<tr>')
+		table.push('<th><span class="btn btn-mid change-view game-cursor" data-type="' + type + '">' + FH.t('Boxes.Productions.ModeSingle') + '</span></th>')
+		table.push(`<th colspan=${2+eras.length} class="textright">${FH.HTML.Format(Object.values(erasCurrent).reduce((a,b)=>a+b))}/${FH.HTML.Format(Object.values(erasTotal).reduce((a,b)=>a+b))}</th>`)
+		table.push('</tr>')
+		table.push('<tr class="sorter-header">')
+		table.push('<th data-type="prodgroup'+type+'" class="is-number">' + FH.t('Boxes.Productions.Headings.number') + '</th>')
+		table.push('<th data-type="prodgroup'+type+'">' + FH.t('Boxes.BlueGalaxy.Building') + '</th>')
+		for (const era of eras) {
+			table.push('<th data-type="prodgroup'+type+'" class="is-number text-center">' + FH.t('Eras.'+(parseInt(era)+1)+'.short') + '</span><br><small>'+FH.HTML.Format(erasTotal[era])+'</small></th>')
+		}
+		table.push('<th data-type="prodgroup'+type+'" class="is-number">' + FH.t('Boxes.Productions.Headings.size') + '</th>')
+		table.push('</tr>')
+		table.push('</thead>')
+		table.push('<tbody class="prodgroup'+type+'">')
+
+		for (const group of groupedBuildings) {
+			rowB.push('<tr>')
+			rowB.push('<td data-number="'+group.amount+'">'+group.amount+'x </td>')
+			rowB.push('<td data-text="'+group.building.name.replace(/[. -]/g,"")+'"><span data-meta_id="'+group.building.entityId+'" data-eff="'+group.building.rating?.totalScore * 100+'" data-era="'+(group.eraName==="AllAge"?"":group.eraName)+'" data-callback_tt="building" class="helperTT ' + (FH.Main.Allies.buildingList?.[group.building.id]?"ally" : "") +'">'+ group.building.name +'</span></td>')
+			for (const era of eras) {
+				rowB.push('<td data-number="'+group[era]+'" class="text-center">')
+				rowB.push(FH.HTML.Format(group[era]))
+				rowB.push('</td>')
+			}
+			rowB.push('<td data-number="'+(group.building.size.length*group.building.size.width)+'">'+group.building.size.length+'x'+group.building.size.width+'</td>')
+			rowB.push('</tr>')
+		}
+
+		table.push(rowB.join(''))
+
+		table.push('</tbody>')
+		table.push('</table>')
+
+		return table.join('')
+	},
+
+
+	buildGuildGoodsTable: (buildingIds, type = "clan_goods") => {
+		let table = [],
+			rowB = [],
+			rowA = [],
+			groupedBuildings = [],
+			eras = [],
+			erasCurrent = {},
+			erasTotal = {},
+			inADay = Math.floor(Date.now() / 1000) + 86400
+
+		// gather all different eras
+		eras = Productions.getRelevantGoodsByEra(buildingIds, guildGoods = true);
+
+		// prepare array with total number of goods for each era
+		for (const era of eras) {
+			erasCurrent[era] = 0
+			erasTotal[era] = 0
+		}
+
+		// single view table content
+		for (const b of buildingIds) {
+			let building = CityBuildings.getBuildingById(b.id)
+			if (building.player_id !== FH.Player.ID || !building.state.connected) continue; 
+
+			rowA.push('<tr>')
+			rowA.push('<td class="text-center">')
+			rowA.push((building.state.isPolivated !== undefined ? (building.state.isPolivated ? srcLinks.icons('when_motivated') : '☆') : ''))
+			rowA.push('</td>')
+			rowA.push('<td data-text="'+FH.helper.str.cleanup(building.name)+'"><span data-meta_id="'+building.entityId+'" data-eff="'+building.rating?.totalScore * 100+'" data-era="'+(building.eraName==="AllAge"?"":building.eraName)+'" data-callback_tt="building" class="helperTT ' + (FH.Main.Allies.buildingList?.[building.id]?"ally" : "") +'">' + building.name + '</span></td>')
+
+			// prepare grouped buildings
+			let updateGroup = groupedBuildings.find(x => x.building.name === building.name)
+			if (updateGroup === undefined) {
+				let gBuilding = {
+					building: building,
+					amount: 1,
+				}
+				for (let era of eras) {
+					gBuilding[era] = 0
+				}
+				updateGroup = gBuilding
+				groupedBuildings.push(gBuilding)
+			}
+			else {
+				updateGroup.amount++
+			}
+
+			let currentGoods = CityBuildings.getBuildingGuildGoodsByEra(true, building, true)
+			let allGoods = CityBuildings.getBuildingGuildGoodsByEra(false, building, true)
+
+			for (const era of eras) {
+				let currentGoodAmount = 0
+				let goodAmount = 0
+				if (allGoods !== undefined) {
+					erasCurrent[era] += currentGoodAmount = currentGoods?.eras?.[era] || 0
+					erasTotal[era] += goodAmount = allGoods?.eras?.[era] || 0
+					updateGroup[era] += goodAmount
+				}
+				if (building.isBoostable) {
+					goodAmount = Math.round(goodAmount)
+					currentGoodAmount = Math.round(currentGoodAmount)
+				}
+				rowA.push('<td data-number="'+goodAmount+'" class="text-center">')
+					if (currentGoodAmount !== goodAmount) {
+						let isAverage = (allGoods.hasRandomProduction ? "Ø" : "")
+						rowA.push(FH.HTML.Format(currentGoodAmount)+'/'+isAverage+FH.HTML.Format(goodAmount))
+					}
+					else
+						rowA.push(FH.HTML.Format(goodAmount))
+				rowA.push('</td>')
+			}
+
+			rowA.push('<td data-number="'+Technologies.Eras[building.eraName]+'">' + FH.t("Eras."+Technologies.Eras[building.eraName]+".short") + '</td>')
+			let time = "-"
+			let showRelativeProductionTime = JSON.parse(FH.Storage.getItem('productionsShowRelativeTime')||"false")
+			let showAMPMTime = JSON.parse(FH.Storage.getItem('productionsShowAMPMTime')||"false")
+			if (building.state.times?.at) {
+				if (showRelativeProductionTime)
+					time = moment.unix(building.state.times?.at).fromNow()
+				else if (showAMPMTime)
+					time = moment.unix(building.state.times?.at).format('LTS')
+				else {
+					if (building.state.times?.at <= inADay)
+						time = moment.unix(building.state.times?.at).format('HH:mm:ss') 
+					else
+						time = moment.unix(building.state.times?.at).format('dddd, HH:mm')
+				}
+			}
+			let done = (building.state.name === 'collectable' ? FH.t('Boxes.Productions.Done') : '')
+			rowA.push('<td style="white-space:nowrap" data-date="' + (building.state.times?.at||9999999999) + '">' + (done==""? time : '<b class="text-success">'+done+'</b>') + '</td>')
+			rowA.push('<td class="text-right">')
+			rowA.push('<span class="show-entity" data-id="' + building.id + '"><img class="game-cursor" src="' + FH.extUrl + 'images/hud/open-eye.png"></span>')
+			rowA.push('</td>')
+			rowA.push('</tr>')
+		}
+
+		let totalProduction = Profile.guildGoods = Object.values(erasTotal).length > 0 ? Object.values(erasTotal).reduce((a,b)=>a+b) : 0;
+		Profile.update();
+		let currentProduction = Object.values(erasCurrent).length > 0 ? Object.values(erasCurrent).reduce((a,b)=>a+b) : 0;
+
+		// single view table
+		table.push('<table id="'+type+'-list" class="foe-table sortable-table exportable TSinactive '+type+'-list active">')
+		table.push('<thead class="sticky">')
+		table.push('<tr>')
+		table.push('<th colspan="'+(6+eras.length)+'"><span class="btn btn-mid change-view game-cursor" data-type="' + type + '">' + FH.t('Boxes.Productions.ModeGroups') + '</span> <input type="text" placeholder="' + FH.t('Boxes.Productions.FilterTable') + '" class="filterCurrentList">')
+		table.push(`<span style="float:right;">${FH.HTML.Format(currentProduction)}/${FH.HTML.Format(totalProduction)} <button class="typeBoost btn btn-slim"><a href="#guild_goods_production" class="game-cursor">${FH.t('General.Boost')}: ${Boosts.Sums.guild_goods_production}%</a></button></span> </th>`)
+		table.push('</tr>')
+		table.push('<tr class="sorter-header exportheader">')
+		table.push('<th class="no-sort tdmin" data-type="prodlist'+type+'"> </th>')
+		table.push('<th class="ascending" data-type="prodlist'+type+'">' + FH.t('Boxes.BlueGalaxy.Building') + '</th>')
+		for (const era of eras) {
+			table.push('<th data-type="prodlist'+type+'" class="is-number text-center"><span data-original-title="'+FH.t('Eras.'+(parseInt(era)+1))+'">' + FH.t('Eras.'+(parseInt(era)+1)+'.short') + '<br><small>'+FH.HTML.Format(erasCurrent[era])+'/'+FH.HTML.Format(erasTotal[era])+'</small></span></th>')
+		}
+		table.push('<th data-type="prodlist'+type+'" class="is-number">' + FH.t('Boxes.Productions.Headings.era') + '</th>')
+		table.push('<th data-type="prodlist'+type+'" class="is-date">'+FH.t('General.Collection')+'</th>')
+		table.push('<th data-type="prodlist'+type+'" class="no-sort"> </th>')
+		table.push('</tr>')
+		table.push('</thead>')
+		table.push('<tbody class="prodlist'+type+'">')
+		table.push( rowA.join('') )
+		table.push('</tbody>');
+		table.push('</table>');
+
+		// grouped view
+		table.push('<table class="foe-table sortable-table TSinactive '+type+'-group">')
+		table.push('<thead class="sticky">')
+		table.push('<tr>')
+		table.push('<th><span class="btn btn-mid change-view game-cursor" data-type="' + type + '">' + FH.t('Boxes.Productions.ModeSingle') + '</span></th>')
+		table.push(`<th colspan=${2+eras.length} class="textright">${FH.HTML.Format(currentProduction)}/${FH.HTML.Format(totalProduction)}</th>`)
+		table.push('</tr>')
+		table.push('<tr class="sorter-header">')
+		table.push('<th data-type="prodgroup'+type+'" class="is-number">' + FH.t('Boxes.Productions.Headings.number') + '</th>')
+		table.push('<th data-type="prodgroup'+type+'">' + FH.t('Boxes.BlueGalaxy.Building') + '</th>')
+		for (const era of eras) {
+			table.push('<th data-type="prodgroup'+type+'" class="is-number text-center">' + FH.t('Eras.'+(parseInt(era)+1)+'.short') + '</span><br><small>'+FH.HTML.Format(erasTotal[era])+'</small></th>')
+		}
+		table.push('<th data-type="prodgroup'+type+'" class="is-number">' + FH.t('Boxes.Productions.Headings.size') + '</th>')
+		table.push('</tr>')
+		table.push('</thead>')
+		table.push('<tbody class="prodgroup'+type+'">')
+			groupedBuildings.forEach(building => {
+				rowB.push('<tr>')
+				rowB.push('<td data-number="'+building.amount+'">'+building.amount+'x </td>')
+				rowB.push('<td data-text="'+building.building.name.replace(/[. -]/g,"")+'" data-era="'+(building.eraName==="AllAge"?"":building.eraName)+'" data-callback_tt="building" class="helperTT ' + (FH.Main.Allies.buildingList?.[building.id]?"ally" : "") +'">'+ building.building.name +'</td>')
+				for (const era of eras) {
+					rowB.push('<td data-number="'+building[era]+'" class="text-center">')
+					rowB.push(FH.HTML.Format(building[era]))
+					rowB.push('</td>')
+				}
+				rowB.push('<td data-number="'+(building.building.size.length*building.building.size.width)+'">'+building.building.size.length+'x'+building.building.size.width+'</td>')
+				rowB.push('</tr>')
+			})
+		table.push( rowB.join('') )
+		table.push('</tbody>')
+		table.push('</table>')
+
+		return table.join('')
+	},
+
+	
+	buildGroupedTable: (type, groupedBuildings, boostCounter) => {
+		let tableGr = [], rowB = []
+		tableGr.push('<table class="foe-table sortable-table TSinactive '+type+'-group">')
+		tableGr.push('<thead class="sticky">')
+		tableGr.push('<tr>')
+		tableGr.push('<th colspan="7"><span class="btn btn-mid change-view game-cursor" data-type="' + type + '">' + (type=="items" || type=="units" ?FH.t('Boxes.Productions.ModeSum') : FH.t('Boxes.Productions.ModeSingle')) + '</span></th>')
+		tableGr.push('</tr>')
+		tableGr.push('<tr class="sorter-header">')
+		tableGr.push('<th data-type="prodgroup'+type+'" class="is-number">' + FH.t('Boxes.Productions.Headings.number') + '</th>')
+		tableGr.push('<th data-type="prodgroup'+type+'">' + FH.t('Boxes.BlueGalaxy.Building') + '</th>')
+		if (type.includes('att') || type.includes('def')) {
+			tableGr.push('<th class="boost '+type+' is-number text-center" data-type="prodgroup'+type+'"><span></span>'+boostCounter[type].all+'</th>')
+			tableGr.push('<th class="boost battleground is-number text-center" data-type="prodgroup'+type+'"><span></span>'+boostCounter[type].battleground+'</th>')
+			tableGr.push('<th class="boost guild_expedition is-number text-center" data-type="prodgroup'+type+'"><span></span>'+boostCounter[type].guild_expedition+'</th>')
+			tableGr.push('<th class="boost guild_raids is-number text-center" data-type="prodgroup'+type+'"><span></span>'+boostCounter[type].guild_raids+'</th>')
+		}
+		else
+			tableGr.push('<th colspan="4" data-type="prodgroup'+type+'" class="is-number">' + FH.t('Boxes.Productions.Headings.number') + '</th>')
+		tableGr.push('<th data-type="prodgroup'+type+'" class="is-number">' + FH.t('Boxes.Productions.Headings.size') + '</th>')
+		tableGr.push('</tr>')
+		tableGr.push('</thead>')
+		tableGr.push('<tbody class="prodgroup'+type+'">')
+			groupedBuildings.forEach(building => {
+				rowB.push('<tr>')
+				rowB.push('<td data-number="'+building.amount+'" class="tdmin">'+building.amount+'x </td>')
+				rowB.push('<td data-text="'+building.building.name.replace(/[. -]/g,"")+'" data-era="'+(building.eraName==="AllAge"?"":building.eraName)+'" data-callback_tt="building" class="helperTT ' + (FH.Main.Allies.buildingList?.[building.id]?"ally" : "") +'">'+ building.building.name +'</td>')
+				if (type.includes('att') || type.includes('def')) {
+					rowB.push('<td data-number="'+building.boosts.all*building.amount+'" class="text-center">'+ (building.boosts.all !== 0 ? FH.HTML.Format(building.boosts.all*building.amount) : '') +'</td>')
+					rowB.push('<td data-number="'+building.boosts.battleground*building.amount+'" class="text-center">'+ (building.boosts.battleground !== 0 ? FH.HTML.Format(building.boosts.battleground*building.amount) : '') +'</td>')
+					rowB.push('<td data-number="'+building.boosts.guild_expedition*building.amount+'" class="text-center">'+ (building.boosts.guild_expedition !== 0 ? FH.HTML.Format(building.boosts.guild_expedition*building.amount) : '') +'</td>')
+					rowB.push('<td data-number="'+building.boosts.guild_raids*building.amount+'" class="text-center">'+ (building.boosts.guild_raids !== 0 ? FH.HTML.Format(building.boosts.guild_raids*building.amount) : '') +'</td>')
+				}
+				else if (type === "items") {
+					rowB.push('<td colspan="4">'+Productions.showBuildingItems(false, building.building)[0]+'</td>')
+				}
+				else {
+					if (building.currentValues === building.values) 
+						rowB.push('<td colspan="4" data-number="'+building.currentValues+'">'+FH.HTML.Format(building.currentValues)+'</td>')
+					else {
+						rowB.push('<td colspan="4" data-number="'+building.currentValues+'">'+FH.HTML.Format(building.currentValues)+'/'+(groupedBuildings.hasRandomProductions ? 'Ø' : '')+FH.HTML.Format(building.values)+'</td>')
+					}
+				}
+				rowB.push('<td data-number="'+(building.building.size.length*building.building.size.width)+'">'+building.building.size.length+'x'+building.building.size.width+'</td>')
+				rowB.push('</tr>')
+			})
+		tableGr.push( rowB.join('') )
+		tableGr.push('</tbody>')
+		tableGr.push('</table>')
+
+		return tableGr
+	},
+
+
+	buildSumTable: (type,Sum) => {
+		if (Object.values(Sum).length==0) return []
+
+		let table = []
+		let elements = []
+		if (type=="items") {
+			elements = Object.values(Sum).sort((a,b) => a.name>b.name?1:-1)
+		} else { //units
+			elements = Object.values(Sum).sort((b,a) => ((a.theory?.type=="rogue"?100:0)+(a.theory?.era||0))-((b.theory?.type=="rogue"?100:0)+(b.theory?.era||0)))
+		}
+
+		table.push('<table class="foe-table '+type+'-sum">')
+		table.push('<thead class="sticky">')
+		table.push('<tr>')
+		table.push('<th colspan="8"><span class="btn btn-mid change-view game-cursor">' + FH.t('Boxes.Productions.ModeSingle') + '</span></th>')
+		table.push('</tr>')
+		table.push('<tr >')
+		table.push('<th colspan="'+(type=="items"?1:2) +'">' + FH.t('Boxes.Productions.Headings.number') + '</th>')
+		table.push('<th colspan="'+(type=="items"?7:6) +'" >' + (type=="items" ? FH.t('Boxes.Productions.Headings.item'):FH.t('Boxes.Units.Unit')) + '</th>')
+		table.push('</tr>')
+		table.push('</thead>')
+		table.push('<tbody>')
+		for (e of elements) {
+			if (type=="items") {
+				let amount = (e.amount ? parseFloat(Math.round(e.amount*100)/100) : "") 
+							+ (e.random && e.amount ? " + " : "") 
+							+ (e.random ? "Ø " + parseFloat(Math.round(e.random*100)/100) : "")
+				table.push (`<tr><td class="text-right">${amount}</td><td>${(e.fragment ? `<img src="${FH.extUrl}js/web/x_img/fragment.png" class="fragIcon" />` : "" )}</td><td colspan="5">${e.name}</td></tr>`)
+			} else {//units
+				let currentamount = (e.current?.amount ? parseFloat(Math.round(e.current.amount*100)/100) : (e.theory?.type !== "random" ? "0" :""))
+
+				let theoryamount =  (e.theory?.amount ? parseFloat(Math.round(e.theory.amount*100)/100) : "") 
+							+ (e.theory?.random && e.theory?.amount ? " + " : "") 
+							+ (e.theory?.random ? "Ø " + parseFloat(Math.round(e.theory.random*100)/100) : "")
+				theoryamount = (currentamount !="" && theoryamount !== "" ? "/ ":"") + theoryamount
+				table.push (`<tr><td colspan="2">${currentamount} ${theoryamount}</td><td colspan="6"><span class="unit_skill ${(e.theory?.type||e.current.type).replace(/next./,"")}" title="${FH.t("Boxes.Units." + (e.theory?.type||e.current.type).replace(/next./,"") )}"></span> <span>${(e.theory?.era===0 ||e.current?.era===0)? "" : FH.t('Eras.'+(e.theory?.era||e.current?.era))}</span></td></tr>`)
+			}
+		}
+		table.push('</tbody>')
+		table.push('</table>')
+
+		return table
+	},
+
+
+	getBuildingProductionByCategory(current = false, building, category) {
+		let prod = {
+			amount: 0,
+			type: null, // units
+			units: [],
+			hasRandomProductions: false,
+			doubleWhenMotivated: false
+		}
+		let productions = (current ? building.state.production : building.production);
+
+		if (building.type === "production" && !current) {
+			productions = [productions[productions?.length-1]];
+		}
+
+		if (productions) {
+			for (let production of productions) {
+				if (production === undefined) continue;
+
+				if (production.type === 'random') {
+					production.resources.forEach(resource => {
+						if (resource.type+"s" === category) { // units 
+							prod.amount += resource.amount * resource.dropChance
+							prod.hasRandomProductions = true
+							let Uera = Technologies.Eras[building.eraName]
+							Uera = Uera + (resource.name.includes("next") && Uera<Technologies.getMaxEra() ? 1 : 0)
+							let Utype=resource.name
+							prod.units.push({type:Utype.replace(/next./,""),amount:0,random:resource.amount * resource.dropChance,era:Utype=="rogue"?0:Uera,next:Productions.isNextEraUnit(building, Utype)})
+						}
+						if (resource.type === "guild_goods" && category === "clan_goods" 
+							|| resource.subType === "strategy_points" && category === "strategy_points"
+							|| resource.subType === "money" && category === "money" 
+							|| resource.subType === "supplies" && category === "supplies"
+							|| resource.subType === "medals" && category === "medals") {
+							prod.amount += resource.amount * resource.dropChance;
+							prod.hasRandomProductions = true;
+						}
+					})
+				}
+				if (production.type === "resources" && category !== "goods") {
+					if (production.resources[category]) {
+						prod.doubleWhenMotivated = production.doubleWhenMotivated
+						prod.amount += production.resources[category] //* doubleMoney
+					}
+				}
+				if (production.type === "special_goods" && category === "special_goods") {
+					let specialGoodsBoost = (building.type === "greatbuilding" ? 0 : Boosts.Sums.special_goods_production) // GB productions can not be boosted
+					let combinedValues = Object.entries(production.resources).length === 1 ? Math.round(prod.amount * specialGoodsBoost/100) : 0;
+					for (let [type,value] of Object.entries(production.resources)) {
+						let boostedValue = Math.round(value * specialGoodsBoost/100);
+						combinedValues += value+boostedValue;
+					}
+					prod.amount = combinedValues;
+				}
+				if (production.type+"s" === category) { // units
+					let Utype = Object.keys(production.resources)[0]
+					let UAmount = production.resources[Utype]
+					let Uera = Technologies.Eras[building.eraName]
+					if (!current && building.type === "main_building") Utype = "random" //does not work... why???
+					Uera = Uera + (Utype.includes("next") && Uera<Technologies.getMaxEra() ? 1 : 0)
+					prod.amount += UAmount
+					if (!current && building.type === "greatbuilding") {
+						let m = Object.values(FH.Main.CityMapData).filter(x=>x.type=="military")
+						let RAmount = UAmount/m.length
+						m.forEach (x => {
+							let Rtype = FH.Main.CityEntities[x.cityentity_id].available_products[0].unit_class
+							if (FH.Main.CityEntities[x.cityentity_id].available_products[0].unit_type_id=="rogue") Rtype="rogue"   //Banners + Drummers???
+							let Rera = Technologies.Eras[FH.Main.CityEntities[x.cityentity_id].requirements.min_era]
+							prod.units.push({type:Rtype.replace(/next./,""),amount:0,random:RAmount,era:Rtype=="rogue"?0:Rera})
+						})
+					} else {
+						prod.units.push({type:Utype.replace(/next./,""),amount:UAmount,random:0,era:building.type === "greatbuilding" || Utype=="rogue" ?0:Uera,next:Productions.isNextEraUnit(building, Utype)})
+					}
+					if (current === true && building.type !== "main_building" && building.type !== "greatbuilding")
+						prod.type = Utype
+					else
+						prod.type = null
+				}
+				if (category === "clan_goods" && production.type === "guildResources") {
+					if (production.resources?.all_goods_of_age)
+						prod.amount = production.resources?.all_goods_of_age
+					else {
+						if (production.resources !== undefined) {
+							let good = FH.Goods.List.find(x => x.id === Object.keys(production.resources)[0])
+							if (good !== undefined)
+								prod.amount = production.resources[good.id]*5 // multiply found good by 5
+						}
+					}
+				}
+			}
+		}
+
+		if (building.population && category === "population") {
+			prod.amount += building.population
+		}
+		if (building.happiness && category === "happiness") {
+			prod.amount += building.happiness
+		}
+
+		if (category === "goods") {
+			return CityBuildings.getBuildingGoodsByEra(current, building, true);
+		}
+		if (category === "forge_points_production" || category === "coin_production" || category === "supply_production" || category === "goods_production" || category === "medals_production" || category === "special_goods_production" || category === "guild_goods_production") {
+			prod.amount = building.boosts.filter(x => x.type[0] === category)[0].value // not really rock solid like this
+		}
+		return prod
+	},
+
+
+	showBuildingItems(current = false, building) {
+		let allItems = '',
+			allUnits = '',
+			itemArray = [];
+
+		// current item production
+		if (current && (building.state?.isPolivated === true || building.state?.isPolivated === undefined) && Array.isArray(building.state?.production)) {
+			for (const production of building.state?.production) {
+				if (production.type !== "genericReward") continue;
+				if (production.resources?.icon?.includes("good")) return false;
+
+				let frag = production.resources.subType === "fragment";
+				allItems += '<span>'+production.resources.amount + "x" + (frag ? `<img src="${FH.extUrl}js/web/x_img/fragment.png" class="fragIcon" /> ` : "" ) + production.resources.name + "</span><br>";
+				itemArray.push({fragment:frag,name:production.resources.name,amount:production.resources.amount,random:0});
+			}
+		}
+		// general item production
+		else {
+			if (building.production) {
+				for (const production of building.production) {
+					if (production.type === "random") {
+						for (const resource of production.resources) {
+							if (resource.type.includes("good") || resource.type === "resources") continue;
+
+							let frag = resource.subType === "fragment"
+							let amount = parseFloat(Math.round(resource.amount*resource.dropChance * 100) / 100)
+							if (resource.type === "unit") {
+								allUnits += "Ø " + amount + "x" + (frag ? `<img src="${FH.extUrl}js/web/x_img/fragment.png" class="fragIcon" /> ` : "" ) + `<img src='${srcLinks.get("/shared/icons/"+resource.name.replace(/next./,"").replace("random","random_production")+".png",true)}'>` + "<br>"
+							} else {
+								allItems += "<span>Ø " + amount + "x" + (frag ? `<img src="${FH.extUrl}js/web/x_img/fragment.png" class="fragIcon" /> ` : "" ) + resource.name + "</span><br>"
+								itemArray.push({fragment:frag,name:resource.name,amount:0,random:amount,itemId:resource.id})
+							}
+						}
+					}
+					if (production.type === "unit") {
+						for (let u of Object.keys(production.resources)) {
+							allUnits += production.resources[u] + "x " + `<img src='${srcLinks.get("/shared/icons/"+u.replace(/next./,"").replace("random","random_production")+".png",true)}'>` + "<br>"
+						}
+					} 
+					if (production.resources?.type === "consumable") {
+						let itemId = production.resources.id.split('#')[1]
+						itemId = (itemId === undefined) ? '' : itemId
+						let frag = production.resources.subType === "fragment"
+						allItems += `<span class="'${itemId}'">`+production.resources.amount + "x" + (frag ? `<img src="${FH.extUrl}js/web/x_img/fragment.png" class="fragIcon" /> ` : "" ) + production.resources.name.replace(/^\d+/, "") + "</span><br>"
+						itemArray.push({fragment:frag,name:production.resources.name,amount:production.resources.amount,random:0,itemId:itemId});
+					}
+				}
+			}
+		}
+		return [allItems,allUnits,itemArray];
+	},
+
+
+    readType: (d) => {
+	   if (Productions.Boosts['money'] === undefined) Productions.Boosts['money'] = ((Boosts.Sums['coin_production'] + 100) / 100);
+	   if (Productions.Boosts['supplies'] === undefined) Productions.Boosts['supplies'] = ((Boosts.Sums['supply_production'] + 100) / 100);
+	   if (Productions.Boosts['fp'] === undefined) Productions.Boosts['fp'] = ((Boosts.Sums['forge_points_production'] + 100) / 100);
+   },
+
+
+	SetTabs: (id) => {
+		Productions.Tabs.push('<li class="' + id + '" id="prod-' + id + '"><a href="#' + id + '"><span>&nbsp;</span></a></li>');
+	},
+
+
+	GetTabs: () => {
+		return '<ul class="horizontal dark-bg clickable">' + Productions.Tabs.join('') + '</ul>';
+	},
+
+	SetTabContent: (id, content) => {
+		let style = Productions.TabsContent.length > 0 ? ' style="display:none"' : '';
+		Productions.TabsContent.push('<div class="content" id="' + id + '"' + style + '>' + content + '</div>');
+	},
+
+	GetTabContent: () => {
+		return Productions.TabsContent.join('');
+	},
+
+
+	SwitchFunction: () => {
+		$('#Productions').on('click', '.change-view', function() {
+			let activeTable = $(this).parents('table'),
+				hiddenTable = activeTable.next('table') 
+
+			if (hiddenTable.length==0) hiddenTable = activeTable.siblings('table').first();
+
+			activeTable.fadeOut(400, function(){
+				hiddenTable.fadeIn(400)
+				activeTable.removeClass('active')
+				hiddenTable.addClass('active')
+			});
+		});
+	},
+
+
+	/**
+	 * @param {string} Type - The production type to check.
+	 * @returns {boolean} True if there is production for the type, false otherwise.
+	 */
+	TypeHasProduction: (Type) => {
+		if (Type === 'population' || Type === 'happiness' || Type === 'att_boost_attacker' || Type === 'att_boost_defender' || Type === 'def_boost_attacker' || Type === 'def_boost_defender') {
+			return false;
+		}
+		else {
+			return true;
+        }
+    },
+
+
+	/**
+	 * @param {Array} ids - Array of building IDs to highlight.
+	 */
+	ShowOnMap: (ids) => {
+		let IDArray = (ids.length !== undefined ? ids : [ids]);
+
+		if ($('#citymap-main').length < 1)
+			CityMap.init(null);
+
+		$('#grid-outer').removeClass('desaturate');
+		$('[data-id]').removeClass('highlighted');
+
+		setTimeout(() => {
+			$('#grid-outer').addClass('desaturate');
+			for (let i = 0; i < IDArray.length; i++) {
+				let target = document.querySelector('.entity[data-id="' + IDArray[i] + '"]');
+				if (target) {
+					target.classList.add('highlighted');
+				}
+			}
+			let first = document.querySelector('.entity.highlighted');
+			if (first) 
+				$('#map-container').scrollTo($(first), 800, { offset: { left: -150, top: -150 }, easing: 'swing' });
+			
+		}, 500);
+	},
+
+
+	/**
+	 * @param {string} name - The name (or partial name) of buildings to highlight.
+	 */
+	ShowSearchOnMap: (name) => {
+		if( $('#citymap-main').length < 1 )
+			CityMap.init(null);
+
+		$('#grid-outer').removeClass('desaturate');
+
+		setTimeout(() => {
+			CityMap.filterBuildings(name)
+			$('#BuildingsFilter').attr('value',name)
+		}, 500);
+	},
+
+
+	/**
+	 * Returns a translated name for a given good type or era-specific good.
+	 *
+	 * @param {string} GoodType - The good type identifier.
+	 * @returns {string} The localized name of the good type.
+	 */
+	GetTypeName: (resourceType) => {
+		let name = '';
+		if (resourceType.includes('guild_raids')) {
+			name += FH.t('Boxes.General.Quantum_Incursion.short') + ' ';
+
+			if (resourceType === 'guild_raids_action_points_collection') {
+				name += FH.t('Boxes.BoostList.guild_raids_action_points_collection');
+			} 
+			else if (resourceType === 'guild_raids_units_start') {
+				name += FH.t('Boxes.BoostList.guild_raids_units_start');
+			}
+			else if (resourceType === 'guild_raids_goods_start') {
+				name += FH.t('Boxes.BoostList.guild_raids_goods_start');
+			}
+			else if (resourceType === 'guild_raids_coins_start') {
+				name += FH.t('Boxes.BoostList.guild_raids_coins_start');
+			}
+			else if (resourceType === 'guild_raids_coins_production') {
+				name += FH.t('Boxes.BoostList.guild_raids_coins_production');
+			}
+			else if (resourceType === 'guild_raids_supplies_start') {
+				name += FH.t('Boxes.BoostList.guild_raids_supplies_start');
+			}
+			else if (resourceType === 'guild_raids_supplies_production') {
+				name += FH.t('Boxes.BoostList.guild_raids_supplies_production');
+			}
+        }
+		else if (resourceType.includes('happiness')) {
+			name += FH.t('Boxes.Productions.Happiness');
+		}
+		else if (resourceType === 'clan_power') {
+			name += FH.t('Boxes.Productions.GuildPower');
+		}
+		else if (resourceType === 'clan_goods') {
+			name += FH.t('Boxes.Productions.GuildGoods');
+        }
+		else if (resourceType === 'units-next') {
+			name += FH.t('General.UnitsNext');
+		}
+		else if (resourceType.includes('units')) {
+			name += FH.t('General.Units');
+		}
+		else if (resourceType.includes('battleground')) {
+			name += FH.t('Boxes.General.Guild_Battlegrounds.short') + ' ';
+		}
+		else if (resourceType.includes('guild_expedition')) {
+			name += FH.t('Boxes.General.Guild_Expedition.short') + ' ';
+		}
+		else if (resourceType.includes('goods-next')) {
+			name += FH.t('Boxes.Productions.goods_next');
+        }
+		else if (resourceType === 'goods-current') {
+			name += FH.t('Boxes.Productions.goods_current');
+        }
+		else if (resourceType === 'goods-previous') {
+			name += FH.t('Boxes.Productions.goods_previous');
+        }
+		else if (resourceType === 'items') {
+			name += FH.t('Boxes.Productions.fragments');
+        }
+		else if (resourceType === 'fsp') {
+			name += FH.t('Boxes.Productions.FSP');
+        }
+		else if (resourceType === 'forge_points_production') {
+			name += FH.t('Boxes.Productions.fp_boost');
+        }
+		else if (resourceType === 'goods_production') {
+			name += FH.t('Boxes.Productions.goods_boost');
+        }
+		else {
+			if (resourceType && FH.Goods.Data[resourceType]){
+				name += FH.Goods.Data[resourceType]['name'];
+			} /*else {
+				name += resourceType;
+			}*/
+		}
+
+		if (resourceType.includes('att_boost_attacker')) {
+			name += FH.t('Boxes.Productions.att_boost_attacker');
+		}
+		else if (resourceType.includes('att_boost_defender')) {
+			name += FH.t('Boxes.Productions.att_boost_defender');
+		}
+		else if (resourceType.includes('def_boost_attacker')) {
+			name += FH.t('Boxes.Productions.def_boost_attacker');
+		}
+		else if (resourceType.includes('def_boost_defender')) {
+			name += FH.t('Boxes.Productions.def_boost_defender');
+		}
+		return name;
+	},
+
+
+	ShowRating: async (external = false, eraName = null) => {
+		if (!Productions.Rating.Data) 
+			Productions.Rating.load();
+
+		if (FH.ActiveMap === 'OtherPlayer' && !external) 
+			return;
+
+		let era = (eraName === null) ? FH.CurrentEra : eraName;
+		let $ProductionsRating = $('#ProductionsRating');
+
+		if ($ProductionsRating.length === 0) {
+			FH.HTML.Box({
+				id: 'ProductionsRating',
+				title: FH.t('Boxes.ProductionsRating.Title'),
+				auto_close: true,
+				dragdrop: true,
+				minimize: true,
+				resize: true,
+				settings: Productions.RSettings,
+				popout: {w: 1200, h: 700},
+			});
+			
+			FH.helper.preloader.show('#ProductionsRating');
+			
+			FH.HTML.AddCssFile('productions');
+
+			// delegate on the box, not on body - the box may live in a pop-out window
+			$('#ProductionsRatingBody').off('click', '.toggle-tab').on('click', '.toggle-tab', async function () {
+				FH.helper.preloader.show('#ProductionsRating');
+				Productions.RatingCurrentTab = $(this).data('value');
+
+				await Productions.CalcRatingBody(era);
+			});
+			await Productions.CalcRatingBody(era);
+
+		} else {
+			FH.HTML.CloseOpenBox('ProductionsRating');
+		}
+
+	},
+
+	AdditionalSpecialBuildings:null,
+
+	
+	efficiencyTT: (e) => {
+		let type=e?.currentTarget?.dataset?.type
+		if (!Productions.ratedBuildings) return
+		let y = Productions.ratedBuildings.filter(x=>(!x.isInInventory && x?.rating?.[type]>0)).map(x=>(x.rating[type])).sort((a,b) => a - b);
+		if (!y || y.length == 0) return
+		let tooltip = `<h2>${FH.t("Boxes.ProductionsRating.TooltipTitle")}</h2>`
+		tooltip +=`<table class="foe-table"><tr><td>${FH.t("Boxes.ProductionsRating.Best")}:</td><td>${y[y.length-1].toFixed(2)}</td></tr>`
+		tooltip += `<tr><td>${FH.t("Boxes.ProductionsRating.Fifth")}:</td><td>${y[Math.max(y.length-5,0)].toFixed(2)}</td></tr>`
+		tooltip += `<tr><td>${FH.t("Boxes.ProductionsRating.top10percent")}:</td><td>${y[Math.round((y.length-1)*0.9)].toFixed(2)}</td></tr></table>`
+		return tooltip
+	},
+
+	calculateFSP: (type,value) =>{
+		let sum = 0
+		for (let x of Productions.FSPqualifiedResources) {
+			if (Productions.Rating.Data.fsp[x] && Productions.Rating.Data[x].active && Productions.Rating.Data[x].perTile > 0) {
+				sum += (Productions.Rating.Data.fsp[x] / Productions.Rating.Data[x].perTile)
+			}
+		}
+		if (type=="fsp") {
+			if (Math.round(30 / sum*100)/100 == value) return
+			$("#FSPCalculator").remove()
+			for (let x of Productions.FSPqualifiedResources) {
+				delete Productions.Rating.Data.fsp[x]
+			}
+		} else if (sum > 0) {
+			let FSPeff = Math.round(30 / sum*100)/100
+			$("#ProdPerTile-fsp").val(FSPeff)
+			$("#ProdPerTile-fsp").trigger("blur")
+		}
+	},
+
+
+	BindRatingHandlers: (era = '') => {
+		$('#ProductionsRatingBody').off('click', '#ProductionsRatingSettings input[type=checkbox]');
+		$('#ProductionsRatingBody .overlay .results').off('click', 'li');
+		$('#ProductionsRatingBody .overlay .selectMetaBuildings').off('click');
+
+		Productions.AdvancedFilter.bind();
+
+		$('.TSinactive').removeClass('TSinactive');
+		const refreshPresetSelect = () => {
+			Productions.Rating.ensurePresets();
+			$('#ratingPresetSelect').html(Productions.Rating.getPresetOptions());
+		};
+		$('#ratingPresetSelect li:not(.duplicate)').on('click', async function () {
+			const presetId = $(this).data('id');
+			if (!presetId) return;
+			Productions.Rating.setActivePreset(presetId);
+			await Productions.CalcRatingBody();
+		});
+		$('#ratingPresetDuplicate').on('click', async () => {
+			const preset = Productions.Rating.getActivePreset();
+			if (!preset) return;
+			const newId = Productions.Rating.createPreset(preset.data);
+			Productions.Rating.setActivePreset(newId);
+			Productions.Rating.savePresets();
+			await Productions.CalcRatingBody();
+		});
+		$('.ratingPresetDelete').on('click', async () => {
+			const preset = Productions.Rating.getActivePreset();
+			if (!preset) return;
+			if (!window.confirm(FH.t('Boxes.ProductionsRating.PresetConfirmDelete'))) return;
+			const activeId = Productions.Rating.Presets?.activePresetId;
+			Productions.Rating.deletePreset(activeId);
+			Productions.Rating.savePresets();
+			Productions.Rating.load();
+			await Productions.CalcRatingBody();
+		});
+		$('#ratingPresetReset').on('click', async () => {
+			if (!window.confirm(FH.t('Boxes.ProductionsRating.PresetConfirmReset'))) return;
+			Productions.Rating.resetActivePreset();
+			Productions.Rating.save();
+			await Productions.CalcRatingBody();
+		});
+		$('#ratingPresetExport').on('click', () => {
+			Productions.Rating.exportPresets();
+		});
+		$('#ratingPresetImport').on('click', () => {
+			$('#ratingPresetImportFile').trigger('click');
+		});
+		$('#ratingPresetImportFile').on('change', function () {
+			const file = this.files?.[0];
+			this.value = '';
+			Productions.Rating.importPresets(file);
+		});
+
+		$('#tilevalues, label[tilevalues]').on('click', function () {
+			SaveSettings("tilevalues");
+			Productions.AdvancedFilter.apply();
+		});
+
+		$('#showitems, label[showitems]').on('click', function () {
+			SaveSettings("showitems")
+		});
+
+		$('#showhighlighted, label[showhighlighted]').on('click', function () {
+			SaveSettings("showhighlighted")
+		});
+
+		$('#gBs, label[gBs]').on('click', function () {
+			SaveSettings("gBs")
+		});
+
+		$('#showLimited, label[limited]').on('click', function () {
+			SaveSettings("showLimited")
+		});
+
+		$('#inventorybuildings, label[inventorybuildings]').on('click', function () {
+			SaveSettings("inventorybuildings")
+		});
+
+		$('.show-all').on('click', function () {
+			Productions.ShowSearchOnMap($(this).attr('data-name'))
+		});
+
+		$('.ratinglist tr').on('click', function () {
+			$(this).toggleClass('highlighted')
+		});
+
+		// edit a per-building score modifier
+		$('.edit-score-modifier').on('click', function (e) {
+			e.stopPropagation();
+			let icon = $(this);
+			let cell = icon.closest('td');
+			if (cell.find('input.score-modifier-input').length) return;
+			let entityId = icon.attr('data-meta_id');
+			let current = Productions.Rating.getModifier(entityId);
+			cell.addClass('editScore');
+			let input = $('<input type="number" step="1" class="score-modifier-input" value="' + current + '">');
+			cell.append(input);
+			input.trigger('focus').trigger('select');
+
+			let done = false;
+			let commit = (save) => {
+				if (done) return;
+				done = true;
+				let val = Math.round(parseFloat(input.val())) || 0;
+				if (save && val !== current) {
+					Productions.Rating.setModifier(entityId, val);
+					if ($('#ScoreModifiers').length) Productions.BuildScoreModifiersBody();
+					Productions.CalcRatingBody();
+				} else {
+					input.remove();
+					cell.removeClass('editScore');
+				}
+			};
+			input.on('blur', () => commit(true));
+			input.on('click', (ev) => ev.stopPropagation());
+			input.on('keydown', (ev) => {
+				if (ev.key === 'Enter') { ev.preventDefault(); commit(true); }
+				else if (ev.key === 'Escape') { ev.preventDefault(); commit(false); }
+			});
+		});
+
+		$('#addMetaBuilding').on('click',function (){
+			$('#ProductionsRatingBody .overlay').show()
+		})
+
+		$('#ScoreModifiersBtn').on('click', function () {
+			Productions.ShowScoreModifiers();
+		})
+
+		// closing "add building" screen
+		$('.closeMetaBuilding').on('click', async function () {
+			$(this).parent('.overlay').hide()
+
+			marked=[]
+			$(".ratingtable .highlighted td:nth-child(2)").each((x,el)=>{
+				marked.push(el.dataset.text)
+			})
+			search=new RegExp($('#efficiencyBuildingFilter').val(),"i")
+			await Productions.CalcRatingBody();
+			setTimeout(()=>{
+				$(".ratingtable td:nth-child(2)").each((x,el)=>{
+					if (marked.includes(el.dataset.text)) {
+						el.parentElement.classList.add("highlighted")
+					}
+				})
+				$('#efficiencyBuildingFilter').val(search.source==="(?:)"?"":search.source)
+				$('#efficiencyBuildingFilter').trigger("input")
+			},500)
+		})
+
+		if (Productions.efficiencySettings.tilevalues !== $('#tilevalues').is(':checked')) $('#tilevalues').trigger("click")
+		if (Productions.efficiencySettings.showitems !== $('#showitems').is(':checked')) $('#showitems').trigger("click")
+		if (Productions.efficiencySettings.showhighlighted !== $('#showhighlighted').is(':checked')) $('#showhighlighted').trigger("click")
+		if (Productions.efficiencySettings.gBs !== $('#gBs').is(':checked')) $('#gBs').trigger("click")
+		if (Productions.efficiencySettings.showLimited !== $('#showLimited').is(':checked')) $('#showLimited').trigger("click")
+
+		if (Productions.RatingBuildingTab === 'ascended') $('#ProductionsRatingBody').addClass('showLimited');
+
+		// building-type tabs: everything / city / inventory / ascended.
+		// Every row/control for every tab is already in the DOM (tagged via tab-* row classes and
+		// [data-tabs] on controls), so switching tabs is just a visibility toggle - no recompute, no preloader.
+		$('.ratingtable .buildingTypeTabs li').off('click').on('click', function () {
+			let value = $(this).data('value');
+			if (!value || value === Productions.RatingBuildingTab) return;
+			Productions.RatingBuildingTab = value;
+			Productions.ApplyRatingFilters();
+		});
+
+		$('#findMetaBuilding').on('input', function () {
+			let regEx=new RegExp($(this).val(),"i");
+			filterMeta(regEx)
+		});
+		let filterMeta = (regEx) => {
+			$('#ProductionsRatingBody .overlay .results').html("");
+
+			let foundBuildings = Object.values(Productions.AdditionalSpecialBuildings || {}).filter(x => regEx.test(x.filter)).sort((a,b)=>(((a.selected !== b.selected) ? (a.selected ? -2 : 2) : 0)+(a.name>b.name?1:-1)))
+
+			for (building of foundBuildings) {
+				$('#ProductionsRatingBody .overlay .results').append(`<li data-meta_id="${building.id}" data-era="${(era==="AllAge"?"":era)}" data-callback_tt="building" class="helperTT${building.selected ? " selected":""}">${building.name}</li>`)
+			}
+		}
+		filterMeta(/./)
+		$('#ProductionsRatingBody .overlay .results').on("click","li",(e)=>{
+			let id = e.target.dataset.meta_id
+			Productions.AdditionalSpecialBuildings[id].selected =!Productions.AdditionalSpecialBuildings[id].selected
+			e.target.classList.toggle("selected")
+		})
+		$('#ProductionsRatingBody .overlay .selectMetaBuildings').on("click",(e)=>{
+			let li = $('#ProductionsRatingBody .overlay .results li');
+			for (let item of li) {
+				item.classList.toggle("selected");
+				let id = item.dataset.meta_id;
+				Productions.AdditionalSpecialBuildings[id].selected =!Productions.AdditionalSpecialBuildings[id].selected
+			}
+		})
+
+		$('#ProductionsRatingBody').on('click', '#ProductionsRatingSettings input[type=checkbox]', function () {
+			let elem = $(this);
+			let isChecked = elem.prop('checked');
+			let type = elem.attr('id').replace('Enabled-','');
+
+			if (isChecked && Productions.Rating.Data[type]?.perTile === null)
+				Productions.Rating.Data[type].perTile = 0;
+
+			$('#ProdPerTile-' + type).toggleClass('hidden', !isChecked);
+
+			Productions.Rating.Data[type].active = isChecked;
+			Productions.calculateFSP(type, 0);
+			Productions.Rating.save();
+		});
+
+		$('#showallies, label[allies]').on('click', async function () {
+			SaveSettings("showallies");
+			await Productions.CalcRatingBody();
+		});
+
+		// settings: change any number
+		$('#ProductionsRatingSettings input[type=number]').on('blur', function () {
+			let elem = $(this);
+			let type = elem.attr('id').replace('ProdPerTile-','');
+			Productions.Rating.Data[type].perTile = parseFloat(elem.val()) || 0;
+			Productions.calculateFSP(type,Productions.Rating.Data[type].perTile)
+			Productions.Rating.save();
+		});
+
+		// result: search function
+		$('#efficiencyBuildingFilter').on('input', e => {
+			let filter = $('#efficiencyBuildingFilter').val().toLowerCase();
+			Productions.RatingSearchTerm = filter;
+
+			let terms = filter.split('|').map(t => t.trim()).filter(t => t !== '');
+			let sizeTermRegEx = /^\d+x\d*$/;
+
+			$('.ratinglist tr td:nth-child(2)').each((x,y) => {
+				let matched = false;
+
+				if (terms.length > 0) {
+					let size = (y.dataset.size || '').toLowerCase();
+					let entityId = $(y).find('.helperTT').attr('data-meta_id')?.toLowerCase() || '';
+					let text = $(y).text();
+
+					matched = terms.some(term => {
+						if (term.startsWith('_')) {
+							return entityId.includes(term.slice(1));
+						}
+						if (sizeTermRegEx.test(term)) {
+							return size.startsWith(term);
+						}
+						return new RegExp(term,"i").test(text);
+					});
+				}
+
+				y.parentElement.classList.toggle('highlighted2', matched);
+			});
+		});
+		// settings: show FSP calculator
+		$("#ShowFSPCalculator").on('click', e => {
+			if ($("#FSPCalculator").length === 1) {
+				$("#FSPCalculator").remove()
+				return
+			}
+			h=`<div id="FSPCalculator" class="dark-bg p5"><h2>${FH.t("Boxes.ProductionsRating.TitleFSPCalculator")}</h2><div class="cats flex-between my-5 p5">`
+			for (let x of Productions.FSPqualifiedResources) {
+				h+=`<div><span class="resicon ${x}"></span> <input type="number" step="1" min="0" max="1000000" class="${x} no-grow" value="${Productions.Rating.Data.fsp[x]||""}"></div>`				
+			}
+			h+="</div>"
+			$(h).insertAfter($("li.fsp")).promise().done(()=>{
+				$("#FSPCalculator input").on('input', e => {
+					type=e.target.classList[0]
+					Productions.Rating.Data.fsp[type] = Number(e.target.value||0)||0
+					Productions.calculateFSP()
+				})
+			})
+		})
+
+		// change minimum score for inventory buildings
+		$('#inventorybuildingscore').on('blur', async e => {
+			SaveSettings("inventorybuildingscore");
+			await Productions.CalcRatingBody();
+		});
+
+		let $ratingTooltips = $('#ProductionsRatingBody [data-original-title]');
+		$ratingTooltips.tooltip({container: FH.HTML.tooltipHost($ratingTooltips), html:true});
+
+		$('.sortable-table').tableSorter();
+
+		$('.reset-button').on('click', function () {
+			if (window.confirm(FH.t('Boxes.ProductionsRating.ConfirmReset'))) {
+				Productions.Rating.resetActivePreset();
+				Productions.Rating.save();
+			}
+		});
+
+		FH.helper.preloader.hide('#ProductionsRating');
+
+		if (Productions.RatingSearchTerm !== "") {
+			$('#efficiencyBuildingFilter').trigger('input');
+		}
+
+		Productions.ApplyRatingFilters();
+	},
+
+	ApplyRatingFilters: () => {
+		let tab = Productions.RatingBuildingTab || 'everything';
+
+		$('.ratingtable [data-original-title]').tooltip('hide');
+		FH.HTML.clearTooltips();
+
+		$('.ratingtable .buildingTypeTabs li').removeClass('active').filter('[data-value="'+tab+'"]').addClass('active');
+
+		$('.ratinglist tr').each(function () {
+			$(this).css('display', $(this).hasClass('tab-' + tab) ? '' : 'none');
+		});
+
+		$('.ratingtable [data-tabs]').each(function () {
+			let tabs = ($(this).attr('data-tabs') || '').split(' ');
+			let applicable = tabs.includes(tab);
+			$(this).css({opacity: applicable ? '' : '0.4', pointerEvents: applicable ? '' : 'none'});
+			$(this).find('input').prop('disabled', !applicable);
+		});
+
+		// hides via a class, the tab filter above hides via inline display - they never overwrite each other
+		Productions.AdvancedFilter.apply();
+	},
+
+	CalcRatingSettingsOnly: (era = '') => {
+		let h = [];
+		h.push(Productions.CalcRatingSettings());
+		$('#ProductionsRatingBody').html(h.join('')).promise().done(function () {
+			Productions.BindRatingHandlers(era);
+		});
+		FH.helper.preloader.hide('#ProductionsRating');
+	},
+
+
+	CalcRatingBody: async (era = '') => {
+		if (Productions.RatingCurrentTab === 'Settings') {
+			Productions.CalcRatingSettingsOnly(era);
+			return;
+		}
+
+		if (FH.ActiveMap === 'OtherPlayer' && ['inventory','ascended'].includes(Productions.RatingBuildingTab))
+			Productions.RatingBuildingTab = 'everything';
+
+		let tab = Productions.RatingBuildingTab || 'everything';
+
+		let buildingCount = {};
+		let uniqueBuildings = [];
+		let ratedBuildings = [];
+		let h = [];
+		
+		let withAllies = Productions.efficiencySettings.showallies;
+		Productions.BuildingsAll = Object.values(CityBuildings.createBuildings(Object.values(FH.Main.CityMapData),withAllies));
+		Productions.setChainsAndSets(Productions.BuildingsAll);
+
+		// grab special buildings
+		if (!Productions.AdditionalSpecialBuildings) {
+			let spB = Object.values(FH.Main.CityEntities).filter(x=> (x.is_special && !["O_","U_","V_","H_","Y_"].includes(x.id.substring(0,2))) || x.id.substring(0,11) === "W_MultiAge_")
+			Productions.AdditionalSpecialBuildings = {}
+			for (x of spB) {
+				Productions.AdditionalSpecialBuildings[x.id] = {id:x.id,name:x.name,selected:false,filter:x.id+";"+x.name}
+			}
+		}
+		let InventoryBuildings = Productions.InventoryBuildings = Kits.BuildingsFromInventory();
+		if (FH.ActiveMap === 'OtherPlayer')
+			InventoryBuildings = [];
+
+		for (let [id,data] of Object.entries(InventoryBuildings)){
+			//if(!id || id.slice(0, 2) !== 'W_') continue; // if starts not with "W_", continue
+			let metaData = FH.Main.CityEntities[id];
+			let building = CityBuildings.createBuilding(metaData, FH.CurrentEra);
+			building.isInInventory = true;
+			Productions.BuildingsAll.push(building);
+			buildingCount[id+"I"] = data.amount||1;
+		}
+
+		// get one of each building, only highest available era
+		for (const building of Productions.BuildingsAll) {
+			if (building === undefined || building.type === 'street' || building.type === 'military' || building.id >= 2000000000 || building.type.includes('hub')) continue
+
+			let compare = building.name;
+			if (FH.Main.Allies.buildingList?.[building.id] && withAllies) 
+				compare += "+" + Object.keys(FH.Main.Allies.buildingList?.[building.id]).join("+");
+			
+			let foundBuildingIndex = uniqueBuildings.findIndex(x => x.name === compare && x.isInInventory === building.isInInventory && !FH.Main.Allies.buildingList?.[x.id])
+			if (!withAllies) 
+				foundBuildingIndex = uniqueBuildings.findIndex(x => x.name === compare && x.isInInventory === building.isInInventory)
+			
+			let inventoryIdentifier = (building.isInInventory ? "I" : "C");
+			if (foundBuildingIndex === -1) {
+				uniqueBuildings.push(building)
+				if (buildingCount[building.entityId+inventoryIdentifier] === undefined)
+					buildingCount[building.entityId+inventoryIdentifier] = 1;
+				delete Productions.AdditionalSpecialBuildings[building.entityId];
+			} else {
+				let foundBuilding = uniqueBuildings[foundBuildingIndex]
+				buildingCount[building.entityId+inventoryIdentifier] += 1
+
+				if (Technologies.InnoEras[foundBuilding.eraName] < Technologies.InnoEras[building.eraName])
+					uniqueBuildings[foundBuildingIndex] = building;
+			}
+		}
+
+		let selectedAdditionals = Object.values(Productions.AdditionalSpecialBuildings).filter(x=>x.selected).map(x=>x.id);
+
+		Productions.ratedBuildings = ratedBuildings = Productions.rateBuildings(uniqueBuildings,false,era).concat(Productions.rateBuildings(selectedAdditionals,true,era));
+
+		if (Productions.RatingCurrentTab === 'Results') {
+			FH.helper.preloader.show('#ProductionsRating');
+
+			ratedBuildings.sort((a,b) => {
+				if (a.rating.totalScore < b.rating.totalScore) return 1
+				if (a.rating.totalScore > b.rating.totalScore) return -1
+				return 0
+			});
+
+			// combine attack and defend boosts if both are active
+			let combinedRatingTypes = [];
+			for (const type of Productions.Rating.Types) {
+				// skip inactive ones
+				if (!Productions.Rating.Data[type]?.active) continue;
+
+				if (!type.includes('att_') && !type.includes('def_')) {
+					combinedRatingTypes.push(type);
+					continue;
+				}
+				// combine att & def into one - list always starts with att_
+				if (type.includes('att_') || type.includes('def_')) {
+					let coreType = type.replace('att_','').replace('def_','');
+					let combinedType = 'att_def_'+coreType;
+					let twinType = type.includes('att_') ? 'def_'+coreType : 'att_'+coreType;
+
+					if (combinedRatingTypes.find(x => x.includes(combinedType))) continue;
+
+					if (Productions.Rating.Data[twinType]?.active) 
+						combinedRatingTypes.push(combinedType);
+					else 
+						combinedRatingTypes.push(type);
+				}
+			}
+
+			let colNumber = Object.values(Productions.Rating.Data).filter(x=>x.active).length;
+
+			h.push(`<div class="ratingtable">
+				<a id="RatingsResults" class="toggle-tab btn btn-slim" data-value="Settings">${FH.t('Boxes.ProductionsRating.Settings')}</a>
+				<a id="ScoreModifiersBtn" class="btn btn-slim">${FH.t('Boxes.ProductionsRating.ModifiersButton')}</a>
+				<table class="foe-table sortable-table TSinactive exportable">
+				<thead class="sticky">
+				<tr class="settings">
+					<th colspan="${colNumber+5}">
+						<div class="options">
+						<div class="tabs">
+						<a class="btn btn-mid" id="addMetaBuilding">${FH.t('Boxes.ProductionsRating.AddBuilding')}</a>
+						<ul class="horizontal dark-bg clickable buildingTypeTabs">
+							<li data-value="everything" class="${tab==='everything'?'active':''}"> ${FH.t('General.Everything')}</li> 
+							<li data-value="city" class="${tab==='city'?'active':''}"><img src="${FH.extUrl}images/menu/citymap.png"> ${FH.t('General.City')}</li> `);
+					if (FH.ActiveMap !== 'OtherPlayer') {
+						h.push(`<li data-value="inventory" class="${tab==='inventory'?'active':''}"><img src="${FH.extUrl}js/web/x_img/inventory.png"> ${FH.t('General.Inventory')}</li>`);
+					}
+				h.push(`<li data-value="ascended" class="${tab==='ascended'?'active':''}"><img src="${srcLinks.get(`/shared/gui/upgrade/upgrade_icon_limited_building.png`,true)}" /> ${FH.t('Boxes.CityMap.limited')}</li></ul>
+						<input type="search" id="efficiencyBuildingFilter" size=20 value="${Productions.RatingSearchTerm}" placeholder="${FH.t('Boxes.ProductionsRating.Filter')}: neo|_gbg|4x4" />
+						<label for="showhighlighted" data-original-title="${FH.t('Boxes.ProductionsRating.ShowHighlightedExplanation')}"><input type="checkbox" id="showhighlighted" />${FH.t('Boxes.ProductionsRating.ShowHighlighted')}</label>
+						</div>
+						<div class="listmodifiers windowBG">
+						<label for="tilevalues"><input type="checkbox" id="tilevalues" />${FH.t('Boxes.ProductionsRating.ShowValuesPerTile')}</label>
+						<label for="showitems" data-original-title="${FH.t('Boxes.ProductionsRating.ShowItems')}"><input type="checkbox" id="showitems" /><span class="filter showitems"></span></label>
+						<label for="showallies" data-original-title="${FH.t('Boxes.ProductionsRating.ShowAllies')}" data-tabs="everything city ascended"><input type="checkbox" id="showallies" ${(Productions.efficiencySettings.showallies? 'checked' : '')} /><span class="filter showallies"></span></label>
+						<label for="gBs" data-original-title="${FH.t('Boxes.ProductionsRating.NoGBsExplanation')}" data-tabs="everything city"><input type="checkbox" id="gBs" /><img src="${srcLinks.get(`/shared/gui/constructionmenu/icon_greatbuilding.png`,true)}" /></label>`);
+					if (FH.ActiveMap !== 'OtherPlayer') {
+						h.push(`<div class="inventory">
+							<label for="inventorybuildingscore" data-original-title="${FH.t('Boxes.ProductionsRating.InventoryBuildingScoreExplanation')}" data-tabs="everything inventory ascended"><img class="game-cursor" src="${FH.extUrl}js/web/x_img/inventory.png"> ${FH.t('Boxes.ProductionsRating.InventoryBuildingScore')}: <input type="number" size="6" value="${(Productions.efficiencySettings.inventorybuildingscore*100)}" id="inventorybuildingscore" /></label>
+							<label for="showLimited" data-original-title="${FH.t('Boxes.ProductionsRating.NoLimitedExplanation')}" data-tabs="everything inventory ascended"><input type="checkbox" id="showLimited" /><img src="${srcLinks.get(`/shared/gui/upgrade/upgrade_icon_limited_building.png`,true)}" /></label>
+							</div>`);
+					}
+				h.push(`<a id="efficiencyAdvancedToggle">${FH.t('Boxes.ProductionsRating.AdvancedFilter')}<span class="af-badge"></span></a>
+				</div>`);
+				h.push(Productions.AdvancedFilter.show());
+				h.push(`</div>
+				</th>
+				</tr>
+				<tr class="sorter-header exportheader sort2">
+				<th data-type="ratinglist" class="is-number descending" data-export="${FH.t('Boxes.ProductionsRating.Score')}">${FH.t('Boxes.ProductionsRating.Score')}</th>
+				<th data-type="ratinglist" data-export="${FH.t('Boxes.ProductionsRating.BuildingName')}"><div class="flex-between"><span>${FH.t('Boxes.ProductionsRating.BuildingName')}</span></th>
+				`);
+			h.push('<th data-type="ratinglist" class="is-number" data-export="#"></th><th class="no-sort inventory-buildings text-center"><img alt="" data-original-title="'+FH.t('Boxes.ProductionsRating.InventoryTooltip')+'" class="game-cursor" src="' + FH.extUrl + 'js/web/x_img/inventory.png" /></th>');
+
+			for (const type of combinedRatingTypes) {
+				let firstType = type;
+				let secondType = null;
+				let divider = 1;
+				if (type.includes('att_def_')) {
+					firstType = type.replace('def_','');
+					secondType = type.replace('att_','');
+					divider = 2;
+				}
+				h.push(`<th data-type="ratinglist" style="width:1%" data-export="${Productions.GetTypeName(firstType)}" class="is-number text-center buildingvalue" data-original-title="${Productions.GetTypeName(firstType)}`+
+					(secondType !== null ? `, ${Productions.GetTypeName(secondType)}: ${Productions.Rating.Data[firstType].perTile} + ${Productions.Rating.Data[secondType]?.perTile} / 2"` : '"')+
+					`><span class="resicon ${firstType}"` + (secondType === null ? ' style="margin-bottom:0"' : '') + `></span>`+ (secondType === null ? '<br>' : '') +
+					(secondType !== null ? '<span class="resicon ' + secondType + '"></span><i>': '')+
+					((Productions.Rating.Data[firstType].perTile + (Productions.Rating.Data[secondType]?.perTile || 0) || 0) /divider)+
+					'</i></th>');
+
+				h.push(`<th data-type="ratinglist" style="width:1%" data-export="${Productions.GetTypeName(firstType)}" class="is-number text-center tilevalue" data-original-title="${Productions.GetTypeName(firstType)}`+
+					(secondType !== null ? `, ${Productions.GetTypeName(secondType)}: ${Productions.Rating.Data[firstType].perTile} + ${Productions.Rating.Data[secondType]?.perTile} / 2"` : '"')+
+					`><span class="resicon ${firstType}"></span>`+
+					(secondType !== null ? '<span class="resicon ' + secondType + '"></span><i>': '')+
+					((Productions.Rating.Data[firstType].perTile + (Productions.Rating.Data[secondType]?.perTile || 0) || 0) /divider)+
+					'</i></th>');
+			}
+
+			h.push('<th data-type="ratinglist" data-export="Items" class="no-sort items">Items</th>');
+			h.push('</tr>');
+
+			h.push('</thead>');
+			h.push('<tbody class="ratinglist">');
+
+			// the advanced filter looks rows up by their index in here
+			Productions.RatingRows = [];
+
+			for (const building of ratedBuildings) {
+				// determine which tabs this row belongs to once so switching tabs afterward is a client-side visibility toggle
+				let alreadyInCity = building.isInInventory && (buildingCount[building.entityId+"C"] !== undefined || buildingCount[building.entityId+"C"] >= 1);
+				let belowThreshold = building.isInInventory && building.rating.totalScore < Productions.efficiencySettings.inventorybuildingscore;
+
+				let tabClasses = [];
+				// everything: all buildings, except inventory buildings below the threshold or already owned in the city
+				if (!building.isInInventory || (!alreadyInCity && !belowThreshold)) tabClasses.push('tab-everything');
+				// city only: no inventory buildings at all
+				if (!building.isInInventory) tabClasses.push('tab-city');
+				// inventory only: no city buildings
+				if (building.isInInventory && !belowThreshold) tabClasses.push('tab-inventory');
+				// ascended only: limited buildings from both city and inventory
+				if (building.isLimited && (!building.isInInventory || (!alreadyInCity && !belowThreshold))) tabClasses.push('tab-ascended');
+
+				if (tabClasses.length === 0) continue;
+
+				let buildingSize = `${building.size.length}x${building.size.width}`;
+
+				// snapshot the rating once + remember the footprint for the advanced filter
+				let rowIndex = Productions.RatingRows.length;
+				Productions.RatingRows.push({
+					rating: building.rating,
+					length: building.size.length,
+					width: building.size.width
+				});
+
+				[randomItems,randomUnits] = Productions.showBuildingItems(false, building)
+				h.push(`<tr data-ridx="${rowIndex}" class="${tabClasses.join(' ')} ${building.type==='greatbuilding'?'gb ':''}${building.isLimited?'limited ':''}${building.highlight?'additional bg-blue ':''}${building.isInInventory?'inventory-building ':''}">`)
+				let scoreModifier = Math.round(building.rating.scoreModifier || 0);
+				let score = Math.round(building.rating.totalScore * 100); // totalScore already includes the modifier!
+				let baseScore = score - scoreModifier;
+				h.push('<td data-number="'+ (building.rating.totalScore * 100) +'" class="wsnw text-center score-cell'+(scoreModifier !== 0 ? ' has-modifier' : '')+'">')
+				h.push(`<span class="score-value ${(scoreModifier > 0 ? 'pos' : (scoreModifier < 0 ? 'neg' : ''))}"
+					data-original-title="${baseScore + (scoreModifier > 0 ? ' + ' : (scoreModifier < 0 ? ' - ' : '')) + (scoreModifier !== 0 ? Math.abs(scoreModifier) : '')}">${score}</span>`);
+				h.push('<span class="edit-score-modifier game-cursor" data-meta_id="'+building.entityId+'" data-original-title="'+FH.t('Boxes.ProductionsRating.ScoreModifierTooltip')+'">✎</span>')
+				h.push('</td>')
+
+				h.push(`<td exportvalue="${building.name}" data-text="${FH.helper.str.cleanup(building.name)}" data-size="${buildingSize}" class="${(FH.Main.Allies.buildingList?.[building.id]?"ally" : "")}"><div class="flex-between"><div>`);
+				if (!building.highlight && !building.isInInventory)
+					h.push('<span class="show-all" data-original-title="'+FH.t('Boxes.General.ShowOnMap')+'" data-name="'+building.name+'"><img class="game-cursor" alt="" src="' + FH.extUrl + 'images/hud/open-eye.png"></span>');
+
+				h.push('<span data-meta_id="'+building.entityId+'" data-eff="'+building.rating.totalScore * 100+'" data-era="'+(building.eraName==="AllAge"?"":building.eraName)+'" data-callback_tt="building" class="helperTT" '+ FH.Main.Allies.tooltip(building.id) + '>'+building.name+'</span>')
+
+				let eraShortName = FH.t("Eras."+Technologies.Eras[building.eraName]+".short")
+				if (eraShortName !== "-")
+					h.push(" ("+FH.t("Eras."+Technologies.Eras[building.eraName]+".short") +')');
+
+				if (await CityBuildings.canAscend(building.entityId)) {
+					let ascendedId = (await CityMap.AscendingBuildings)[building.entityId];
+					
+					let inInventory = Object.keys(InventoryBuildings).find(x => x === ascendedId);
+					if (inInventory)
+						h.push(`<span class="upgrades helperTT" data-meta_id="${ascendedId}" data-callback_tt="building" data-era="${building.eraName==="AllAge"?"":building.eraName}"><span class="ascended"></span></span>`);
+				}
+
+				h.push(`</div></td>`);
+				
+				// show amount in city if > 1
+				let buildingAmount = (FH.Main.Allies.buildingList?.[building.id] && withAllies ? 1 : (buildingCount[building.entityId+"C"] || 1));
+				h.push('<td exportvalue="'+buildingAmount+'" data-number="'+buildingAmount+'"><div class="text-right">')
+				if (buildingAmount > 1) 
+					h.push('<span data-original-title="'+FH.t('Boxes.ProductionsRating.CountTooltip')+'">' + buildingCount[building.entityId+"C"]+'x</span>')
+				h.push("</div></td>");
+
+				h.push('<td class="text-center">')
+				// show additional buildings from inventory
+				if ((buildingCount[building.entityId+"I"] !== undefined && !building.isInInventory) || building.isInInventory) {
+					h.push(`<b data-callback_tt="InventoryKits" data-id="${building.entityId}" class="helperTT inventoryAmount">${buildingCount[building.entityId+"I"]}x</b> `)
+				}
+				h.push('</td>')
+
+				for (const type of combinedRatingTypes) {
+					let firstType = type;
+					let secondType = null;
+					if (type.includes('att_def_')) {
+						firstType = type.replace('def_','');
+						secondType = type.replace('att_','');
+					}
+
+					// normal boosts
+					if (secondType === null) {
+						h.push(`<td class="text-right${firstType==="units" ? " units":""} buildingvalue" data-number="${Math.round(parseFloat(building.rating[firstType]))}" ${firstType==="units" ? `data-original-title="${randomUnits}"`:""}>`)
+						h.push(FH.HTML.Format(building.rating[firstType]))
+						h.push('</td>')
+
+						let roundingFactor = building.rating[firstType+'-tile'] > 100 || building.rating[firstType+'-tile'] < -100 ? 1 : 100
+						let tileValue = Math.round(building.rating[firstType+'-tile'] * roundingFactor) / roundingFactor
+						h.push(`<td class="text-right${firstType==="units" ? " units":""} tilevalue" data-number="${tileValue}" ${firstType==="units" ? `data-original-title="${randomUnits}"`:""}>`)
+						h.push(FH.HTML.Format(tileValue))
+						h.push('</td>')
+					}
+					// combined attack boosts
+					else {
+						// Calculate combined value for building value
+						let firstValue = Math.round(building.rating[firstType]);
+						let secondValue = Math.round(building.rating[secondType]);
+						let combinedValue = (firstValue + secondValue);
+
+						h.push(`<td class="text-right buildingvalue" data-number="${combinedValue}">`)
+						h.push(FH.HTML.Format(building.rating[firstType]+building.rating[secondType]))
+						h.push('</td>')
+
+						// Calculate combined value for tile value - simplified to avoid precision errors
+						let firstTileValue = building.rating[firstType+'-tile'];
+						let secondTileValue = building.rating[secondType+'-tile'];
+
+						// Apply appropriate rounding based on value size
+						let roundFirstTile = firstTileValue > 100 || firstTileValue < -100 ?
+							Math.round(firstTileValue) : Math.round(firstTileValue * 100) / 100;
+
+						let roundSecondTile = secondTileValue > 100 || secondTileValue < -100 ?
+							Math.round(secondTileValue) : Math.round(secondTileValue * 100) / 100;
+
+						let tileValue = Math.round((roundFirstTile + roundSecondTile) * 10) / 10;
+
+						h.push(`<td class="text-right tilevalue" data-number="${tileValue}">`)
+						h.push(FH.HTML.Format(tileValue))
+						h.push('</td>')
+					}
+				}
+
+				h.push('<td class="no-sort items">'+randomItems+'</td>')
+				h.push('</tr>')
+			}
+
+			h.push('</tbody>');
+			h.push('<tfoot><tr class="highlighted-explained"><td colspan="'+(colNumber+3)+'">'+FH.t('Boxes.ProductionsRating.HighlightsExplained')+'</td></tr></tfoot>');
+			h.push('</table>');
+				h.push('<div class="overlay"><a class="window-close closeMetaBuilding"></a>')
+					h.push('<div class="content">')
+						h.push('<input id="findMetaBuilding" placeholder="'+FH.t('Boxes.ProductionsRating.FindSpecialBuilding')+': _gbg" value="">')
+						h.push('<ul class="results foe-table"></ul>')
+						h.push('<div class="btns">')
+						h.push('<a class="btn selectMetaBuildings">'+FH.t('Boxes.ProductionsRating.ToggleBuildingSelection')+'</a>')
+						h.push('<a class="btn closeMetaBuilding btn-green">'+FH.t('Boxes.ProductionsRating.AddBuildings')+'</a>')
+						h.push('</div>')
+					h.push('</div>')
+				h.push('</div>')
+			h.push('</div>');
+		}
+		else {
+			h.push('Something went wrong');
+		}
+
+		SaveSettings=(x)=>{
+			Productions.efficiencySettings[x] = $('#'+x).is(':checked')
+			if (x === "inventorybuildingscore")
+				Productions.efficiencySettings[x] = parseFloat($('#'+x).val())/100
+			FH.Storage.setItem("Productions.efficiencySettings",JSON.stringify(Productions.efficiencySettings))
+			if (x === "inventorybuildingscore") return;
+
+			if ($('#'+x).is(':checked')) {
+				$("#ProductionsRatingBody").addClass(x);
+			} else {
+				$("#ProductionsRatingBody").removeClass(x);
+			}
+		}
+
+		$('#ProductionsRatingBody').html(h.join('')).promise().done(function () {
+			Productions.BindRatingHandlers(era);
+		});
+    },
+
+
+	CalcRatingSettings: () => {
+		let h = [];
+		h.push('<div id="ProductionsRatingSettings">');
+			h.push('<a id="RatingsResults" class="toggle-tab btn btn-slim" data-value="Results"><span>' + FH.t('Boxes.ProductionsRating.Results') + '</span></a>')
+			Productions.Rating.ensurePresets();
+			h.push('<div class="tabs rating-presets dark-bg">')
+			h.push(`<ul id="ratingPresetSelect" class="no-grow horizontal dark-bg clickable">
+				${Productions.Rating.getPresetOptions()}
+				</ul>`)
+			h.push('</div>')
+			h.push('<input type="file" id="ratingPresetImportFile" accept="application/json" style="display:none" />')
+			h.push('<ul class="foe-table">')
+
+			h.push('<li class="dark-bg">')
+			h.push('<span>' + FH.t('Boxes.ProductionsRating.Enabled') + '</span>')
+			h.push('<span></span><span></span>')
+			h.push('<span class="text-right">' + FH.t('Boxes.ProductionsRating.ProdPerTile') + '</span>')
+			h.push('</li>')
+
+			for (let type of Productions.Rating.Types) {
+				if (type === "guild_raids_action_points_collection")
+					h.push(`<li class="heading">${FH.t('Boxes.General.Quantum_Incursion')}</li>`)
+				else if (type === "units")
+					h.push(`<li class="heading">${FH.t('General.Battle')}</li>`)
+				h.push('<li class="'+type+'">')
+				let activeSetting = (Productions.Rating.Data[type]?.active === true);
+				h.push('<input id="Enabled-' + type + '" class="no-grow enabled game-cursor" ' + (activeSetting ? 'checked' : '') + ' type="checkbox">')
+				h.push('<span class="no-grow resicon ' + type + '"></span>')
+				h.push('<label for="Enabled-'+type+'">' + Productions.GetTypeName(type) + '</label>')
+				if (type=="fsp") h.push(`<span id="ShowFSPCalculator" class="clickable" data-original-title="${FH.t("Boxes.ProductionsRating.ShowFSPCalculator")}">🧮</span>`)
+				h.push('<input type="number" id="ProdPerTile-' + type + '" step="0.01" min="0" max="1000000" class="no-grow helperTT '+(Productions.Rating.Data[type]?.active ? '': 'hidden')+'" value="' + (Productions.Rating.Data[type]?.perTile||0) + '", data-callback_tt="Efficiency", data-type="'+type+'-tile">')
+				h.push('</li>');
+			}
+
+			h.push(`<li class="text-right">
+				<div class="btn-group" style="justify-content:end;">
+				<button class="reset-button btn" data-value="Results">${FH.t('Boxes.ProductionsRating.Reset')}</button>
+				<button id="ratingPresetDuplicate" class="btn duplicate clickable">${FH.t('Boxes.ProductionsRating.PresetDuplicate')}</button>
+				<button class="btn btn-delete icon ratingPresetDelete"></button>
+				</li>`);
+			h.push('</ul>');
+			h.push('<div class="content">');
+				h.push('<a class="toggle-tab btn btn-green" data-value="Results">' + FH.t('Boxes.ProductionsRating.Results') + '</a>');
+				h.push('<p>'+FH.t('Boxes.ProductionsRating.Explainer')+'</p>')
+				h.push('<p>'+FH.t('Boxes.ProductionsRating.Disclaimer')+'</p>')
+				h.push('<div class="btn-group">')
+				h.push(`<button class="btn" id="ratingPresetExport">${FH.t('Boxes.ProductionsRating.PresetExport')}</button>`)
+				h.push(`<button class="btn" id="ratingPresetImport">${FH.t('Boxes.ProductionsRating.PresetImport')}</button>`)
+				h.push('</div>')
+			h.push('</div>')
+		h.push('</div>')
+
+		return h.join('');
+	},
+
+
+	rateBuildings: (uniqueBuildings,additional=false,era=null) => {
+		let ratedBuildings = [];
+		if (additional) {
+			uniqueBuildings = uniqueBuildings.map(x=>CityBuildings.createBuilding(x,era||FH.CurrentEra));
+		}
+		for (const building of uniqueBuildings) {
+			// do not include wishingwell type buildings
+			if (building.entityId.includes("L_AllAge_EasterBonus1") || building.entityId.includes("L_AllAge_Expedition16") || building.entityId.includes("L_AllAge_ShahBonus17") || (building.isSpecial === undefined && building.type !== "greatbuilding")) 
+				continue;
+			let ratedBuilding = building;
+			if (additional) ratedBuilding.highlight = true;
+			ratedBuildings.push(ratedBuilding);
+		}
+		return ratedBuildings;
+	},
+
+
+	rateBuilding: (building) => {
+		if (!Productions.Rating.Data) Productions.Rating.load();
+		let size = building.size.width * building.size.length;
+		size += ((building.size.width === 1 || building.size.length === 1) ? building.needsStreet * 0.5 : building.needsStreet);
+
+		let score = {totalScore:0};
+
+		for (const type of Object.keys(Productions.Rating.Data)) {
+			if (Productions.Rating.Data[type].active) {
+				let desiredValuePerTile = parseFloat(Productions.Rating.Data[type].perTile) || 0;
+				if (desiredValuePerTile !== null && !isNaN(desiredValuePerTile)) {
+					let typeValue = Productions.getRatingValueForType(building, type) || 0; // production amount
+					let valuePerTile = typeValue / size;
+
+					if (valuePerTile !== 0 && desiredValuePerTile !== 0)  
+						score.totalScore += (valuePerTile / desiredValuePerTile);
+
+					score[type] = ( Math.round( typeValue * 100 ) / 100 ) || 0;
+					score[type+'-tile'] = valuePerTile || 0;
+				}
+			}
+		}
+		let scoreModifier = Productions.Rating.getModifier(building.entityId);
+		score.scoreModifier = scoreModifier;
+		if (scoreModifier) score.totalScore += scoreModifier / 100;
+
+		return score;
+	},
+
+
+	isNextEraUnit: (building, unitName) => {
+		if (!String(unitName).includes('next')) return false;
+		let eraName = (building.eraName === 'AllAge' || !building.eraName) ? FH.CurrentEra : building.eraName;
+		return Technologies.Eras[eraName] < Technologies.getMaxEra();
+	},
+
+
+	getRatingUnits: (building, next = false) => {
+		let units = Productions.getBuildingProductionByCategory(false, building, 'units').units;
+		let sum = 0;
+		for (const u of units) {
+			if (!!u.next === next) sum += (u.amount || 0) + (u.random || 0);
+		}
+		return sum;
+	},
+
+
+	getRatingValueForType: (building, type) => {
+		if (type === "units" || type === "units-next")
+			return Productions.getRatingUnits(building, type === "units-next");
+		else if (type === "happiness")
+			return building.happiness;
+		else if (type === "population")
+			return building.population;
+		else if (type.includes('att') || type.includes('def')) {
+			if (building.boosts === undefined) return 0;
+
+			let bsum = 0;
+			for (const boost of building.boosts) {
+				if (boost.isMultiplier) continue;
+
+				let feature = type.split('-')[1];
+				if (feature !== boost.feature) continue;
+
+				let bType = boost.type.find(x => x === type.split('-')[0]);
+				if (bType === undefined) continue;
+
+				if (boost.needsLink && building.setBuilding !== undefined) {
+					if (boost.requiredLinks > (building.setBuilding.uniqueAdjacentCount || 0)) continue;
+				}
+
+				bsum += boost.value;
+			}
+			return bsum;
+		}
+		else if (type === "forge_points_production" || type === "goods_production") {
+			if (building.boosts === undefined) return 0;
+			for (const boost of building.boosts) {
+				if (boost.needsLink && building.setBuilding !== undefined) {
+					if (boost.requiredLinks > (building.setBuilding.uniqueAdjacentCount || 0)) continue;
+				}
+				if (boost.type[0] === 'forge_points_production' && type === 'forge_points_production')  {
+					return boost.value;
+				}
+				if (boost.type[0] === 'goods_production' && type === 'goods_production')  {
+					return boost.value;
+				}
+			}
+		}
+		else if (type === "strategy_points" || type === "medals" || type === "premium" || type === "money" || type === "supplies" || type === "clan_goods")
+			return Productions.getBuildingProductionByCategory(false, building, type).amount
+
+		else if (type.includes("goods") && !type.includes("guild_raids_")) {
+			let allGoods = CityBuildings.getBuildingGoodsByEra(false, building);
+			let era = (FH.ActiveMap === "OtherPlayer" ? CityMap.OtherPlayer.eraName : FH.CurrentEra)
+
+			if (allGoods !== undefined) {
+				let prevEra = Technologies.InnoEras[era]-1;
+				let currEra = Technologies.InnoEras[era];
+				let nextEra = Technologies.InnoEras[era]+1;
+
+				if (type === "goods-previous") {
+					if (allGoods.eras[prevEra])
+						return allGoods.eras[prevEra];
+				}
+				if (type === "goods-current") {
+					if (allGoods.eras[currEra])
+						return allGoods.eras[currEra];
+				}
+				if (type === "goods-next") {
+					if (allGoods.eras[nextEra])
+						return allGoods.eras[nextEra];
+				}
+			}
+		}
+		else if (type === "fsp") {
+			let fsp = 0
+			if (building.production) {
+				let possibleProductions = building.production.filter(x => x.type === "genericReward").concat(building.production.filter(x => x.type === "random"))
+				let multiplier = 1
+				for (let production of possibleProductions) {
+					if (production.type === "genericReward") {
+						if (!production.resources.id.includes('rush_event_buildings_instant')) continue
+
+						if (production.resources.subType === 'rush_event_buildings_instant')
+							multiplier = 30 // 30, because 30 fragments are needed for one item
+						fsp = production.resources.amount * multiplier
+					}
+					else if (production.type === "random") {
+						let hasFsp = production.resources.filter(x => x.id?.includes('rush_event_buildings_instant'))
+						if (hasFsp.length === 0) continue
+
+						if (hasFsp[0].subType === "instant_finish_building")
+							multiplier = 30 // 30, because 30 fragments are needed for one item
+						fsp = hasFsp[0].amount * hasFsp[0].dropChance * multiplier
+					}
+				}
+			}
+			return fsp
+		}
+		else if (type.includes("guild_raids_") && !type.includes("att") && !type.includes("def")) {
+			if (building.boosts !== undefined) {
+				let qi_resources = 0;
+				for (const boost of building.boosts) {
+					let bType = boost.type.find(x => x === type);
+					if (bType !== undefined) {
+						qi_resources += boost.value;
+					}
+				}
+				return qi_resources;
+			}
+		}
+		else
+			return 0
+	},
+
+
+	getBoost: (building, boostName, callback) => {
+		building.boosts?.forEach(boost => {
+			let type = boost.type.find(x => x === boostName)
+			if (!boostName.includes('-')) {
+				if (type !== undefined) {
+					const value = { feature: boost.feature, value: boost.value, isMultiplier: boost.isMultiplier === true }
+					callback(value)
+				}
+			}
+			callback(undefined)
+		})
+	},
+
+
+	ShowSettings: () => {
+        let showRelativeProductionTime = JSON.parse(FH.Storage.getItem('productionsShowRelativeTime')||"false")
+        let showAMPMTime = JSON.parse(FH.Storage.getItem('productionsShowAMPMTime')||"false")
+        let show24Time = (showAMPMTime === false && showRelativeProductionTime === false)
+
+        let h = []
+        h.push(`<p><input id="productionsShowRelativeTime" name="productionTime" value="1" type="radio" ${(showRelativeProductionTime === true) ? ' checked="checked"' : ''} /> <label for="productionsShowRelativeTime">${FH.t('Boxes.Productions.RelativeTime')}</label><br>`)
+        h.push(`<input id="productionsShowAMPMTime" name="productionTime" value="1" type="radio" ${(showAMPMTime === true) ? ' checked="checked"' : ''} /> <label for="productionsShowAMPMTime">${FH.t('Boxes.Productions.AMPMTime')}</label><br>`)
+        h.push(`<input id="productionsShow24Time" name="productionTime" value="1" type="radio" ${(show24Time === true) ? ' checked="checked"' : ''} /> <label for="productionsShow24Time">${FH.t('Boxes.Productions.Time24')}</label></p>`)
+		h.push(`<p><button onclick="Productions.SaveSettings()" id="save-productions-settings" class="btn saveSettings">${FH.t('Boxes.Settings.Save')}</button></p>`)
+		
+		let activeTable = $('#ProductionsBody .horizontal li.active').attr('id').replace('prod-','');
+
+        $('#ProductionsSettingsBox').html(h.join(''))
+    },
+
+
+	RSettings: () => {
+		let c = [];
+		c.push(`<p class="text-left">${FH.t('Boxes.General.Export')}: <span class="btn-group">
+		<button class="btn" onclick="Productions.ExportRating('csv')">CSV</button>
+		<button class="btn" onclick="Productions.ExportRating('json')">JSON</button></span></p>`);
+		$('#ProductionsRatingSettingsBox').html(c.join(''));
+	},
+
+
+	ExportRating: (format) => {
+		FH.HTML.ExportTable($('.ratingtable table'), format, 'EfficiencyRating', true);
+	},
+
+
+	ShowScoreModifiers: () => {
+		if ($('#ScoreModifiers').length === 0) {
+			FH.HTML.Box({
+				id: 'ScoreModifiers',
+				title: FH.t('Boxes.ProductionsRating.ModifiersTitle'),
+				auto_close: true,
+				dragdrop: true,
+				minimize: true,
+				resize: true,
+				popout: true
+			});
+			FH.HTML.AddCssFile('productions');
+		}
+		Productions.ScoreModifierPending = [];
+		Productions.BuildScoreModifiersBody();
+	},
+
+
+	getModifierBaseScore: (entityId) => {
+		if (!FH.Main.CityEntities?.[entityId]) return null;
+		try {
+			let building = (Productions.ratedBuildings || []).find(x => x?.entityId === entityId)
+				|| Object.values(FH.Main.CityBuildingsData || {}).find(x => x?.entityId === entityId);
+
+			if (!building) {
+				if (FH.Main.CityEntities[entityId].type === 'greatbuilding') return null;
+				building = Productions.rateBuildings([entityId], true, FH.CurrentEra)[0];
+			}
+
+			if (!building?.rating) return null;
+			return Math.round(building.rating.totalScore * 100) - Math.round(building.rating.scoreModifier || 0);
+		} catch (e) {
+			return null;
+		}
+	},
+
+
+	ScoreModifierRowHtml: (entityId) => {
+		let name = FH.Main.CityEntities?.[entityId]?.name || entityId;
+		let base = Productions.getModifierBaseScore(entityId);
+		let modifier = Productions.Rating.getModifier(entityId);
+		return '<tr data-meta_id="' + entityId + '">' +
+			'<td class="modifier-id" data-text="' + FH.helper.str.cleanup(entityId) + '">' + entityId + '</td>' +
+			'<td data-text="' + FH.helper.str.cleanup(name) + '" data-callback_tt="building" data-era="' + (FH.CurrentEra === 'AllAge' ? '' : FH.CurrentEra) + '" data-meta_id="' + entityId + '">' + name + '</td>' +
+			'<td class="text-right modifier-base" data-number="' + (base === null ? 0 : base) + '">' + (base === null ? '–' : base) + '</td>' +
+			'<td class="text-right" data-number="' + modifier + '"><input type="number" step="1" class="modifier-value" value="' + modifier + '"></td>' +
+			'<td class="text-center"><span class="modifier-delete game-cursor" data-original-title="' + FH.t('Boxes.ProductionsRating.ModifierDelete') + '">✕</span></td>' +
+			'</tr>';
+	},
+
+
+	// Header text-filter (button + popup) for a Score Modifiers column; colIdx is matched against the row cells
+	ScoreModifierFilterControl: (colIdx) =>
+		'<button type="button" class="btn btn-round scoremod-filterbtn" title="' + FH.t('Boxes.ProductionsRating.ColumnFilter') + '">▾</button>' +
+		'<div class="scoremod-filter-popup" data-col="' + colIdx + '" style="display:none"><input type="text" class="scoremod-filter"></div>',
+
+	// Shows/hides rows by the active column text filters (substring, case-insensitive); marks filtered columns
+	FilterScoreModifiers: () => {
+		let body = document.getElementById('ScoreModifiersBody');
+		if (!body) return;
+
+		let filters = [];
+		body.querySelectorAll('.scoremod-filter-popup').forEach((p) => {
+			let input = p.querySelector('.scoremod-filter'),
+				val = input ? input.value.trim() : '',
+				btn = p.parentNode.querySelector('.scoremod-filterbtn');
+			if (btn) btn.classList.toggle('scoremod-flt-on', val.length > 0);
+			if (val) filters.push({ col: +p.dataset.col, val: val.toUpperCase() });
+		});
+
+		body.querySelectorAll('.scoreModifierList tr').forEach((tr) => {
+			let cells = tr.getElementsByTagName('td'),
+				show = filters.every(f => cells[f.col] && cells[f.col].textContent.toUpperCase().indexOf(f.val) !== -1);
+			tr.style.display = show ? '' : 'none';
+		});
+	},
+
+	// Toggles the clicked column's filter popup (one open at a time)
+	onScoreModifierFilterBtnClick: function (e) {
+		e.stopImmediatePropagation(); // don't let tableSorter treat this as a header sort
+		let $popup = $(this).siblings('.scoremod-filter-popup'),
+			wasOpen = $popup.is(':visible');
+		Productions.hideScoreModifierPopups();
+		if (!wasOpen) $popup.show().find('.scoremod-filter').trigger('focus');
+	},
+
+	hideScoreModifierPopups: () => {
+		let body = document.getElementById('ScoreModifiersBody');
+		if (body) $(body).find('.scoremod-filter-popup').hide();
+	},
+
+
+	BuildScoreModifiersBody: () => {
+		Productions.Rating.loadModifiers();
+
+		let ids = Object.keys(Productions.Rating.ScoreModifiers || {});
+		for (let id of Productions.ScoreModifierPending)
+			if (!ids.includes(id)) ids.push(id);
+
+		let h = [];
+		h.push('<div class="score-modifiers">');
+
+		// add-building search across all city entities (filter by id + name)
+		h.push('<div class="score-modifiers-add">');
+		h.push('<h2>' + FH.t('Boxes.ProductionsRating.ModifierAddBuilding') + '</h2>');
+		h.push('<input type="text" id="scoreModifierSearch" placeholder="' + FH.t('Boxes.ProductionsRating.ModifierAddFilter') + '">');
+		h.push('<ul class="results"></ul>');
+		h.push('</div>');
+
+		h.push('<table class="foe-table sortable-table"><thead class="sticky"><tr class="sorter-header">');
+		h.push('<th data-type="scoreModifierList" class="scoremod-filter-th">' + FH.t('Boxes.ProductionsRating.ModifierId') + Productions.ScoreModifierFilterControl(0) + '</th>');
+		h.push('<th data-type="scoreModifierList" class="scoremod-filter-th">' + FH.t('Boxes.ProductionsRating.BuildingName') + Productions.ScoreModifierFilterControl(1) + '</th>');
+		h.push('<th data-type="scoreModifierList" class="is-number text-center">' + FH.t('Boxes.ProductionsRating.ModifierBaseScore') + '</th>');
+		h.push('<th data-type="scoreModifierList" class="is-number text-center">' + FH.t('Boxes.ProductionsRating.ModifierValue') + '</th>');
+		h.push('<th class="no-sort"></th>');
+		h.push('</tr></thead>');
+		h.push('<tbody class="scoreModifierList">');
+		for (let id of ids)
+			h.push(Productions.ScoreModifierRowHtml(id));
+		h.push('</tbody></table>');
+		h.push('<p class="score-modifiers-empty' + (ids.length ? ' hidden' : '') + '">' + FH.t('Boxes.ProductionsRating.ModifierEmpty') + '</p>');
+		h.push('</div>');
+
+		$('#ScoreModifiersBody').html(h.join('')).promise().done(function () {
+			let $body = $('#ScoreModifiersBody');
+			$body.off('.scoremod'); // avoid stacking delegated handlers on rebuild
+
+			// Column filters
+			let $table = $body.find('.sortable-table');
+			$table.on('click', '.scoremod-filterbtn', Productions.onScoreModifierFilterBtnClick);
+			$table.on('click', '.scoremod-filter-popup', (e) => e.stopImmediatePropagation());
+			$table.tableSorter();
+
+			$body.on('input.scoremod', '.scoremod-filter', Productions.FilterScoreModifiers);
+			// Close an open filter popup when clicking outside it; self-unbinds once the box is gone
+			let modDoc = $body[0] ? $body[0].ownerDocument : document;
+			$(modDoc).off('click.scoremodfilter').on('click.scoremodfilter', (e) => {
+				if (!document.getElementById('ScoreModifiersBody')) { $(modDoc).off('click.scoremodfilter'); return; }
+				if ($(e.target).closest('.scoremod-filter-popup, .scoremod-filterbtn').length) return;
+				Productions.hideScoreModifierPopups();
+			});
+
+			let toggleEmpty = () => {
+				$body.find('.score-modifiers-empty').toggleClass('hidden', $body.find('.scoreModifierList tr').length > 0);
+			};
+			// keep an open Results table in sync with modifier changes
+			let syncRating = () => {
+				if ($('#ProductionsRating').length) Productions.CalcRatingBody();
+			};
+
+			// edit a modifier value (0 removes it from storage)
+			$body.on('change.scoremod', '.modifier-value', function () {
+				let entityId = $(this).closest('tr').attr('data-meta_id');
+				let val = Math.round(parseFloat($(this).val())) || 0;
+				Productions.Rating.setModifier(entityId, val);
+				$(this).val(val).closest('td').attr('data-number', val).data('number', val);
+				syncRating();
+			});
+			// don't let editing the input trigger tableSorter's row highlight
+			$body.on('click.scoremod', '.modifier-value', (e) => e.stopPropagation());
+
+			// remove a modifier
+			$body.on('click.scoremod', '.modifier-delete', function () {
+				let $row = $(this).closest('tr');
+				let entityId = $row.attr('data-meta_id');
+				Productions.Rating.setModifier(entityId, 0);
+				Productions.ScoreModifierPending = Productions.ScoreModifierPending.filter(x => x !== entityId);
+				$row.remove();
+				toggleEmpty();
+				syncRating();
+			});
+
+			// add-building search
+			let entities = Object.values(FH.Main.CityEntities || {}).filter(x => x?.id && x?.name);
+			$('#scoreModifierSearch').on('input', function () {
+				let term = $(this).val().trim();
+				let $results = $body.find('.score-modifiers-add .results');
+				$results.html('');
+				if (!term) return;
+				let regEx = new RegExp(term, 'i');
+				let existing = new Set($body.find('.scoreModifierList tr').map((i, el) => $(el).attr('data-meta_id')).get());
+				let matches = entities.filter(x => !existing.has(x.id) && regEx.test(x.id + ';' + x.name)).sort((a, b) => (a.name > b.name ? 1 : -1));
+				let limit = 100;
+				for (let building of matches.slice(0, limit))
+					$results.append('<li data-meta_id="' + building.id + '"><span class="name">' + building.name + '</span><span class="id">' + building.id + '</span></li>');
+				if (matches.length > limit)
+					$results.append('<li class="more">…</li>');
+			});
+
+			// add a building from the search results as a new row
+			$body.on('click.scoremod', '.score-modifiers-add .results li:not(.more)', function () {
+				let entityId = $(this).attr('data-meta_id');
+				if (!entityId) return;
+				if (!Productions.ScoreModifierPending.includes(entityId)) Productions.ScoreModifierPending.push(entityId);
+				$body.find('.scoreModifierList').append(Productions.ScoreModifierRowHtml(entityId));
+				$(this).remove();
+				toggleEmpty();
+				$body.find('.scoreModifierList tr[data-meta_id="' + entityId + '"] .modifier-value').trigger('focus').trigger('select');
+			});
+		});
+	},
+
+
+	SaveSettings: () => {
+        let showRelativeProductionTime = false
+		if ($("#productionsShowRelativeTime").is(':checked')) showRelativeProductionTime = true
+		FH.Storage.setItem('productionsShowRelativeTime', showRelativeProductionTime)
+
+        let showAMPMTime = false
+		if ($("#productionsShowAMPMTime").is(':checked')) showAMPMTime = true
+		FH.Storage.setItem('productionsShowAMPMTime', showAMPMTime)
+
+		if ($("#productionsShow24Time").is(':checked')) {
+			FH.Storage.setItem('productionsShowAMPMTime', false)
+			FH.Storage.setItem('productionsShowRelativeTime', false)
+		}
+
+		Productions.CalcBody()
+
+		$(`#ProductionsSettingsBox`).remove()
+	},
+
+
+	showItemSources:()=>{
+		if ( $('#ItemSources').length === 0 ) {
+			FH.HTML.Box({
+				id: 'ItemSources',
+				title: FH.t('Boxes.ItemSources.Title'),
+				auto_close: true,
+				dragdrop: true,
+				minimize: true,
+				resize: true,
+				popout: true
+			});
+		}
+
+		let items = Productions.buildingItemList()
+
+        let h = `<div>
+					<table class="foe-table sortable-table">
+						<thead class="sticky">
+							<tr class="sorter-header"><th data-type="itemSourcesList"><input type="text" class="filterTable" placeholder="${FH.t('Boxes.General.FilterItems')}" /> Items</th></tr>
+						</thead>
+						<tbody class="itemSourcesList">`
+							for (let item of Object.values(items)) {
+								h += `<tr><td onclick="Productions.updateItemSources(${JSON.stringify(item).replaceAll('"',"'")})" data-text="${FH.helper.str.cleanup(item.name)}">${srcLinks.icons(item.icon)} ${item.name}<div class="innerTable" id="item-${FH.helper.str.cleanup(item.name)}"></div></td></tr>`
+							}
+        			h +=`</tbody>
+					</table>
+				</div>`
+        $('#ItemSourcesBody').html(h)
+        $('#ItemSourcesBody .sortable-table').tableSorter()
+		FH.HTML.FilterTable('#ItemSourcesBody .filterTable')
+	},
+
+
+	buildingItemList: () => {
+		let temp = Object.assign({},...Object.values(FH.Main.CityEntities).filter(b=>b.id[0]==="W").map(x=>({[x.id]:[...JSON.stringify(x).matchAll(/"id":"([^"]*?)"[^()[\]{}]*?"name":"([^"]*?)"[^()[\]{}]*?"iconAssetName":"([^"]*?)"[^{}]*?"__class__":"(GenericReward|TimedReward)"/gm)].map(a=>({id:a[1],name:a[2],icon:a[3]}))})))
+
+		let gl = Object.values(FH.Goods.List).map(g=>g.id)
+		let items = {}
+
+		for (let [building,list] of Object.entries(temp)) {
+			for (let item of list) {
+				if (gl.includes(item.icon))
+					continue
+
+				if (["","icon_fragment"].includes(item.icon))
+					continue
+
+				if (/#\d+/.test(item.id)) {
+					item.id=item.id.replaceAll(/#\d+/g,'')
+					item.name=item.name.replaceAll(/\s?\d+\s?/g,'')
+				}
+				if (items[item.id]) {
+					if (!items[item.id].buildings.includes(building)) items[item.id].buildings.push(building)
+				} else {
+					items[item.id] = {name:item.name,buildings:[building],id:item.id,icon:item.icon}
+				}
+			}
+		}
+		return items
+	},
+
+
+	getBuildingsByBoosts: (boostArray = []) => {
+		let buildings = Object.values(FH.Main.CityEntities).filter(b=>b.id[0]==="W")
+		let boostList = {};
+		boostArray.forEach(boost => boostList[boost] = [])
+		for (let building of buildings) {
+			let buildingAABoost = building.components?.AllAge?.boosts?.boosts;
+			let buildingCABoost = building.components?.[FH.CurrentEra]?.boosts?.boosts;
+			if (buildingAABoost === undefined && buildingCABoost === undefined) continue;
+
+			for (let boost of boostArray) {
+				let foundAllABoost = buildingAABoost?.find(x => x.type === boost);
+				let foundCurrentABoost = buildingCABoost?.find(x => x.type === boost);
+
+				if (foundAllABoost === undefined && foundCurrentABoost === undefined) continue;
+
+				if (boost.includes('guild_raids') && building.id.includes('GuildRaids')) continue;
+
+				boostList[boost].push({
+					name: building.name,
+					entityId: building.id
+				});
+			}
+		}
+		return boostList;
+	},
+
+
+	createBuildingBoostList: (boostArray = []) => {
+		if ( $('#BoostList').length === 0 ) {
+			FH.HTML.Box({
+				id: 'BoostList',
+				title: FH.t('Boxes.BoostList.Title'),
+				auto_close: true,
+				dragdrop: true,
+				minimize: true,
+				resize: true,
+				popout: true
+			});
+		}
+
+		let groupedBuildings = Productions.getBuildingsByBoosts(boostArray);
+
+        let h = `<div>
+					<table class="foe-table sortable-table">
+						<thead class="sticky">
+							<tr class="sorter-header"><th data-type="boostList"><input type="text" class="filterTable" placeholder="${FH.t('Boxes.General.FilterItems')}" /> Boosts</th></tr>
+						</thead>
+						<tbody>`
+							for (let [group, buildings] of Object.entries(groupedBuildings)) {
+								h += '<tr><td><h2><span class="boost '+group+'"></span> '+FH.t('Boxes.BoostList.'+group)+'</h2><ul>'
+								for (let building of buildings) {
+									h += '<li class="helperTT" data-era="'+FH.CurrentEra+'" data-callback_tt="building" data-meta_id="'+building.entityId+'">'+building.name+'</li>'
+								}
+								h += '</ul></td></tr>';
+							}
+        			h +=`</tbody>
+					</table>
+				</div>`
+        $('#BoostListBody').html(h)
+        $('#BoostListBody .sortable-table').tableSorter()
+		FH.HTML.FilterTable('#BoostListBody .filterTable')
+	},
+
+
+	updateItemSources:(item)=>{
+		let itemId = '#item-'+FH.helper.str.cleanup(item.name)
+		$(itemId).parent('td').toggleClass('open')
+		if ($(itemId).html() !== '') {
+			$(itemId).html('')
+			return
+		}
+		let h=`<ul class="foe-table">`
+		for (let b of item.buildings) {
+			h+=`<li class="helperTT" data-era=${FH.CurrentEra} data-callback_tt="building" data-meta_id="${b}">${FH.Main.CityEntities[b].name}</li>`
+		}
+		h+=`</ul>`
+		$(itemId).html(h)
+	},
+
+
+	UpdateEfficiencyEvent: {
+		timeout:null,
+		trigger:()=>{
+			if ($('#ProductionsRating').length == 0) return;
+			if (Productions.UpdateEfficiencyEvent.timeout) clearTimeout(Productions.UpdateEfficiencyEvent.timeout);
+			Productions.UpdateEfficiencyEvent.timeout = setTimeout(()=>{
+				Productions.CalcRatingBody();
+			}, 250);
+		}
+	},
+};
+
+FH.proxy.addHandler('CityMapService', 'placeBuilding', (data, postData) => {
+	Productions.UpdateEfficiencyEvent.trigger()
+	Productions.ProfileDataLoaded = false;
+});
+
+FH.proxy.addHandler('CityMapService', 'removeBuilding', (data, postData) => {
+	Productions.UpdateEfficiencyEvent.trigger()
+	Productions.ProfileDataLoaded = false;
+});
+
+FH.proxy.addCustomHandler('InventoryUpdated',()=>{
+	Productions.UpdateEfficiencyEvent.trigger();
+});
+
+FH.Tooltips.addCallback('Efficiency', Productions.efficiencyTT);

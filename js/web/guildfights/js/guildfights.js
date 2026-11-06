@@ -1,0 +1,3093 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Copyright (C) 2026 Forge Hammer
+ * Licensed under AGPL - see LICENSE.md for details.
+*/
+
+FH.proxy.addCustomHandler('ActiveMapUpdated', () => {
+	if (FH.ActiveMap !== 'gg') {
+		$('#GBGActionLogCount').remove();
+		$('#GBGTargets').remove();
+	}
+});
+
+FH.proxy.addMetaHandler('guild_battleground_maps', (xhr, postData) => {
+	GuildFights.ProvinceNames = JSON.parse(xhr.responseText);
+});
+
+FH.proxy.addMetaHandler('battleground_colour', (xhr, postData) => {
+	GuildFights.Colors = JSON.parse(xhr.responseText);
+	GuildFights.PrepareColors();
+});
+
+FH.proxy.addHandler('GuildBattlegroundService', 'getPlayerLeaderboard', (data, postData) => {
+	GuildFights.HandlePlayerLeaderboard(data.responseData);
+});
+
+FH.proxy.addHandler('GuildBattlegroundService', 'getLeaderboard', (data, postData) => {
+	GuildFights.HandleGuildLeaderboard(data.responseData);
+});
+
+FH.proxy.addWsHandler('GuildBattlegroundService', 'getAction', (data, postData) => {
+	if (data.responseData.action === "province_conquered")
+		GuildFights.HandleSignals(data.responseData);
+});
+
+FH.proxy.addWsHandler('GuildBattlegroundSignalsService', 'updateSignal', data => {
+	GuildFights.HandleSignals(data.responseData);
+});
+
+FH.proxy.addHandler('GuildBattlegroundStateService', 'getState', (data, postData) => {
+	if (data.responseData.stateId === 'unsubscribed') return;
+	GuildFights.GlobalRankingTimeout = setTimeout(()=>{
+		if (data.responseData['stateId'] !== 'participating')	{
+			GuildFights.CurrentGBGRound = parseInt(data.responseData['startsAt']) - 259200;
+
+			if (GuildFights.curDateFilter === null || GuildFights.curDateEndFilter === null) {
+				GuildFights.curDateFilter = moment.unix(GuildFights.CurrentGBGRound).subtract(11, 'd').format('YYYYMMDD');
+				GuildFights.curDateEndFilter = moment.unix(GuildFights.CurrentGBGRound).format('YYYYMMDD');
+			}
+			if (data.responseData['stateId'] !== 'trialSelection')
+				GuildFights.HandlePlayerLeaderboard(data.responseData['playerLeaderboardEntries']);
+		}
+	},500)
+});
+
+FH.proxy.addHandler('RankingService', 'searchRanking', (data, postData) => {
+	clearTimeout(GuildFights.GlobalRankingTimeout);
+});
+
+FH.proxy.addHandler('GuildBattlegroundService', 'getBattleground', (data, postData) => {
+	GuildFights.init();
+	GuildFights.CurrentGBGRound = data.responseData.endsAt;
+
+	if (GuildFights.curDateFilter === null || GuildFights.curDateEndFilter === null) {
+		GuildFights.curDateFilter = moment.unix(GuildFights.CurrentGBGRound).subtract(11, 'd').format('YYYYMMDD');
+		GuildFights.curDateEndFilter = FH.Main.getCurrentDateTime();
+	}
+
+	GuildFights.MapData = data.responseData;
+
+	$('#gildFight-Btn').removeClass('hud-btn-red');
+	$('#selectorCalc-Btn-closed').remove();
+
+	if ($('#ProvinceMap').length > 0) 
+		ProvinceMap.RefreshSector();
+
+	if ($('#LiveGuildFighting').length > 0) 
+		GuildFights.BuildFightContent();
+
+	setTimeout(function () {
+		if (GuildFights.autoOpen && $('#LiveGuildFighting').length === 0) {
+			GuildFights.ShowGuildBox();
+		}
+	}, 800);
+
+	GuildFights.HandleSignals();
+
+	let container = $('#GBGActionLogCount');
+	if (container.length === 0)
+		container = $('<div id="GBGActionLogCount"></div>').appendTo('body');
+	container.html(GBGActionLog.refreshMenuBadge());
+});
+FH.proxy.addHandler('TimerService', 'getTimers', (data, postData) => {
+	if (GuildFights.serverOffset !== null) return;
+	data.responseData.filter(t=>t.type=="battlegroundsAttrition").forEach(t=>{
+		if (!t.time) return;
+		serverMidnight = moment.unix(t.time);
+
+		GuildFights.serverOffset = serverMidnight.format("HH")*60
+									+ serverMidnight.format("mm")*1;
+	})
+});
+
+let GuildFights = {
+
+	Alerts: [],
+	GlobalRankingTimeout:null,
+	PrevAction: null,
+	PrevActionTimestamp: null,
+	NewAction: null,
+	NewActionTimestamp: null,
+	MapData: null,
+	PlayersPortraits: null,
+	Colors: null,
+	SortedColors: null,
+	ProvinceNames: null,
+	InjectionLoaded: false,
+	PlayerBoxContent: [],
+	CurrentGBGRound: null,
+	GBGRound: null,
+	GBGAllRounds: null,
+	GBGHistoryView: false,
+	GBGRoundGuilds: null,
+	LogDatePicker: null,
+	CounterIntervals: [],
+	curDateFilter: null,
+	curDateEndFilter: null,
+	curDetailViewFilter: null,
+	PlayerBoxSettings: {
+		showOnlyActivePlayers: 0,
+	},
+	autoOpen: JSON.parse(FH.Storage.getItem("LiveFightSettings"))?.autoOpen || 0,
+	showGuildColumn: 0,
+	showAdjacentSectors: 0,
+	showOwnSectors: 0,
+	showTileColors: JSON.parse(FH.Storage.getItem("LiveFightSettings"))?.showTileColors || 1,
+	showGbgTargets: JSON.parse(FH.Storage.getItem("LiveFightSettings"))?.showGbgTargets ?? 1,
+	gbgTargetsPosition: JSON.parse(FH.Storage.getItem("LiveFightSettings"))?.gbgTargetsPosition || "top",
+	serverOffset: JSON.parse(FH.Storage.getItem("GuildFights.serverOffset")||"null"),
+	discordWebhook: { 
+		url: JSON.parse(FH.Storage.getItem("LiveFightSettings"))?.discordWebhook || "",
+		template: JSON.parse(FH.Storage.getItem("LiveFightSettings"))?.discordWebhookTemplate || "",
+		bulkTemplate: JSON.parse(FH.Storage.getItem("LiveFightSettings"))?.discordWebhookTemplateBulk || "",
+	},
+	discordCache: null,
+
+	Chart: undefined,
+
+	Tabs: [],
+	TabsContent: [],
+
+	/**
+	 * @returns {Promise<void>}
+	 */
+	checkForDB: async (playerID) => {
+		let hammerDBName = `ForgeHammer_GBG_${playerID}`;
+		let helperDBName = `FoeHelperDB_GuildFights_${playerID}`;
+		let migrationKey = `ForgeHammer_GBG_Migrated_${playerID}`;
+
+		GuildFights.db = new Dexie(hammerDBName);
+
+		GuildFights.db.version(1).stores({
+			snapshots: '&[player_id+gbground+time],[gbground+player_id], [date+player_id], gbground',
+			history: '&gbground',
+			guildHistory: '[gbground+time], gbground'
+		});
+
+		await GuildFights.db.open();
+
+		// One-time migration from FoeHelperDB_GuildFights_${playerID}
+		if (!FH.Storage.getItem(migrationKey)) {
+			try {
+				// Detect version of the old DB 
+				let oldDBVersion = await new Promise((resolve) => {
+					let request = indexedDB.open(helperDBName);
+					request.onsuccess = (e) => {
+						let version = e.target.result.version;
+						e.target.result.close();
+						resolve(version);
+					};
+					request.onerror = () => resolve(0);
+				});
+
+				// there was no DB - indexedDB.open() created a DB
+				if (oldDBVersion === 0) {
+					indexedDB.deleteDatabase(helperDBName);
+					FH.Storage.setItem(migrationKey, '1');
+					return;
+				}
+
+				let hasGuildHistory = oldDBVersion >= 21;
+				let oldDB = new Dexie(helperDBName);
+
+				oldDB.version(1).stores({
+					snapshots: '&[player_id+gbground+time],[gbground+player_id], [date+player_id], gbground',
+					history: '&gbground'
+				});
+
+				if (hasGuildHistory) {
+					oldDB.version(21).stores({
+						guildHistory: '[gbground+time], gbground'
+					});
+				}
+
+				if (oldDBVersion === 21) {
+					await oldDB.open();
+					const exportBlob = await oldDB.export({ prettyJson: true });
+					const exportJson = JSON.parse(await exportBlob.text());
+					if (exportJson?.data?.databaseVersion === 21) {
+						exportJson.data.databaseVersion = 1;
+						const fixedBlob = new Blob([JSON.stringify(exportJson, null, 2)], { type: 'application/json' });
+						await oldDB.close();
+						await oldDB.delete();
+						oldDB = await Dexie.import(fixedBlob);
+					}
+				} else {
+					await oldDB.open();
+				}
+
+				let [snapshots, history] = await Promise.all([
+					oldDB.snapshots.toArray(),
+					oldDB.history.toArray()
+				]);
+
+				let guildHistory = hasGuildHistory ? await oldDB.guildHistory.toArray() : [];
+
+				await Promise.all([
+					GuildFights.db.snapshots.bulkPut(snapshots),
+					GuildFights.db.history.bulkPut(history),
+					GuildFights.db.guildHistory.bulkPut(guildHistory)
+				]);
+				
+
+
+
+				oldDB.close();
+
+				FH.Storage.setItem(migrationKey, '1');
+			} catch (e) {
+				console.warn('Forge Hammer GBG database migration failed:', e);
+			}
+		}
+	},
+
+	init: () => {
+		GuildFights.GetAlerts();
+
+		if (GuildFights.InjectionLoaded === false) {
+			FH.proxy.addWsHandler('GuildBattlegroundService', 'all', data => {
+				if (!data['responseData']?.[0]) return
+				let Pid = data.responseData[0].id || 0;
+				let target = GuildFights.MapData?.map?.provinces?.find(x => (x.id||0) === Pid);
+				if (!target) return;
+
+				for (let x in data.responseData[0]) {
+					if (!data.responseData[0].hasOwnProperty(x) || x === "id" || x === "signal") continue;
+					target[x] = data.responseData[0][x];
+				}
+
+				GuildFights.SetSignals();
+
+				if ($('#LiveGuildFighting').length > 0) {
+					GuildFights.RefreshTable(data['responseData'][0]);
+				}
+
+				if($('#ProvinceMap').length > 0) {
+					ProvinceMap.RefreshSector(data['responseData'][0]);
+				}
+			});
+			GuildFights.InjectionLoaded = true;
+		}
+	},
+
+	CheckOverflow:(d) => {
+		let rewards = [];
+		for (let rank of d) {
+			if (rank.clan.id!=FH.Guild.ID) continue
+			rewards = rank.reward.playerRewards;
+			break;
+		}
+		let warn = {};
+		for (let r of rewards) {
+			let id = r.subType;
+			let cap = FH.Goods.Data[id]?.abilities?.resourceCap?.amount;
+			if (!cap) continue;
+			if (cap < r.amount + (FH.RessourceStock[id] || 0))
+				warn[id] = r.amount + (FH.RessourceStock[id] || 0) - cap;
+		}
+		if (Object.keys(warn).length == 0) return;
+		let div = $(`
+			<div id="GBGSeasonOverflow">
+				<h2>${FH.t('Boxes.GBGSeasonOverflow.Title')}</h2>
+				<p>${FH.t('Boxes.GBGSeasonOverflow.Text')}</p>
+				${Object.keys(warn).map(id => `<p>${srcLinks.icons(id)} ${FH.HTML.FormatNumberShort(warn[id])}</p>`).join('')}
+			</div>
+		`);
+		$('#GBGSeasonOverflow').remove();
+		$('body').append(div);
+		$('#GBGSeasonOverflow').delay(5000).fadeOut(1000);
+		
+	},
+
+	HandleSignals: async (data = null) => {
+		GuildFights.SetSignals(data);
+
+		if (!GuildFights.showGbgTargets) return;
+
+		await GuildFights.GetAlerts();
+
+		$('#nextup td[id^="alert-"]').each(function () {
+			let id = parseInt($(this).attr('id').slice('alert-'.length));
+			$(this).html(GuildFights.GetAlertButton(id));
+		});
+
+		GuildFights.ShowFocusSignals();
+		GuildFights.UpdateMenuSignalTimer();
+
+		if (GuildFights.MapData?.map?.provinces?.some(x => x.signal === "focus")) {
+			if (!GuildFights.SignalsIntervalID)
+				GuildFights.SignalsIntervalID = setInterval(GuildFights.ShowFocusSignals, 1000);
+		}
+		else if (GuildFights.SignalsIntervalID) {
+			clearInterval(GuildFights.SignalsIntervalID);
+			GuildFights.SignalsIntervalID = null;
+		}
+	},
+
+
+	SetSignals: (data = null) => {
+		let provinces = GuildFights.MapData?.map?.provinces;
+		if (!provinces) return;
+
+		let own = GuildFights.MapData.battlegroundParticipants?.find(x => x.clan.id === FH.Guild.ID);
+		if (!own) return;
+
+		if (!Array.isArray(own.signals)) own.signals = [];
+		let signals = own.signals;
+
+		// apply signal changes
+		if (data && data.action !== "province_conquered") {
+			let provinceId = data.provinceId||0;
+			let idx = signals.findIndex(s => (s.provinceId||0) === provinceId);
+
+			if (data.signal === "focus" || data.signal === "ignore") {
+				if (idx === -1) signals.push({provinceId: provinceId, signal: data.signal});
+				else signals[idx].signal = data.signal;
+			}
+			else if (idx !== -1) {
+				signals.splice(idx, 1);
+			}
+		}
+
+		// remove signals from conquered provinces
+		for (let i = signals.length - 1; i >= 0; i--) {
+			let province = provinces.find(x => (x.id||0) === (signals[i].provinceId||0));
+			if (province && province.ownerId === GuildFights.MapData.currentParticipantId)
+				signals.splice(i, 1);
+		}
+
+		for (let province of provinces) {
+			if (province.signal !== undefined) province.signal = undefined;
+		}
+
+		for (let entry of signals) {
+			let province = provinces.find(x => (x.id||0) === (entry.provinceId||0));
+			if (province) province.signal = entry.signal;
+		}
+	},
+
+
+	ShowFocusSignals: () => {
+		let signalProvinces = (GuildFights.MapData?.map?.provinces || []).filter(x =>
+			x.signal === "focus" && x.ownerId !== GuildFights.MapData?.currentParticipantId
+		);
+
+		if (!signalProvinces.length || !GuildFights.showGbgTargets || FH.ActiveMap !== 'gg') {
+			$('#GBGTargets').remove();
+			GuildFights.LastSignalOrder = null;
+			return;
+		}
+
+		let container = $('#GBGTargets');
+		if (container.length === 0) {
+			container = $('<div id="GBGTargets"></div>').appendTo('body');
+			container.on('click', '.deletealertbutton', function (e) {
+				GuildFights.DeleteAlert($(this).data('id'));
+				e.stopPropagation();
+			});
+			container.on('click', '.setalertbutton', function (e) {
+				GuildFights.SetAlert($(this).data('id'));
+				e.stopPropagation();
+			});
+		}
+
+		container.attr('class', `pos-${GuildFights.gbgTargetsPosition}`);
+
+		let activeSignals = new Set();
+
+		let sortedSignals = signalProvinces.sort((a, b) => {
+			let lockedA = a.lockedUntil,
+				lockedB = b.lockedUntil;
+
+			if (lockedA === undefined && lockedB === undefined) return 0;
+			if (lockedA === undefined) return -1;
+			if (lockedB === undefined) return 1;
+
+			return lockedA - lockedB;
+		});
+
+		const maxSignals = 7;
+		let visibleSignals = sortedSignals.slice(0, maxSignals);
+
+		let desiredOrder = visibleSignals.map(p => `target-${p.id||0}`).join(',');
+		let orderChanged = desiredOrder !== GuildFights.LastSignalOrder;
+		GuildFights.LastSignalOrder = desiredOrder;
+
+		for (let province of visibleSignals) {
+			let provinceId = province.id||0;
+			activeSignals.add(`target-${provinceId}`);
+
+			let countDownDate = province.lockedUntil;
+			let remaining = FH.GameTime.diff(countDownDate);
+			let unlocked = remaining === null || remaining <= 0;
+			LiveFightSettings = JSON.parse(FH.Storage.getItem('LiveFightSettings'));
+
+			let title = "!!!";
+			
+			if (remaining > 1800 * 1000) {
+				title = FH.t('Boxes.GuildFights.Time') +" "+ FH.GameTime.moment(countDownDate).add(LiveFightSettings?.showServerTime ? - 60 * (GuildFights.serverOffset ?? 0) : 0 , "seconds").format('HH:mm');
+			}
+			else if (!unlocked) {
+				title = FH.t('Boxes.GuildFights.Count') +" "+ moment.utc(remaining).format('mm:ss');
+			}
+
+			let entry = container.find(`#target-${provinceId}`);
+			let isNew = entry.length === 0;
+
+			if (isNew) {
+				entry = $(`<div id="target-${provinceId}" class="gbgTarget${unlocked ? ' open':''}">
+					<div class="progress"></div>
+					<b class="signal-countdown">${title}</b>
+					<span class="title">
+					<div class="gbgTargetActions clickable">
+						<span class="battleType ${province.isAttackBattleType ? 'red' : ''}">.</span>
+						<img src="${srcLinks.get(`/guild_battlegrounds/map/shared/guild_battlegrounds_target.png`,true)}"/>
+						<div class="createGBGNotification">
+							${GuildFights.GetAlertButton(provinceId)}
+						</div>
+					</div>
+					<b>${province.title}</b>
+					</span>
+				</div>`);
+
+				entry.find('[data-original-title]').tooltip({container: 'body'});
+				entry.find('.settings').on('mouseleave', () => $('.tooltip').remove());
+			}
+			else {
+				if (unlocked)
+					entry.addClass('open');
+				entry.find('.signal-countdown').text(title);
+			}
+
+			if (isNew || orderChanged)
+				entry.appendTo(container);
+
+			if (unlocked)
+				GuildFights.UpdateSignalProgress(entry.find('.progress'), province.conquestProgress || []);
+		}
+
+		container.children().each(function () {
+			if (!activeSignals.has($(this).attr('id'))) $(this).remove();
+		});
+	},
+
+
+	UpdateMenuSignalTimer: () => {
+		let menuSignals = GuildFights.MapData?.map?.provinces?.filter(x => x.signal === 'focus' && x.lockedUntil !== undefined && x.ownerId !== GuildFights.MapData.currentParticipantId) || [];
+		if ($('#gildFight-Btn').length > 0 && menuSignals.length > 0) {
+			let sortedSignals = [...menuSignals].sort((a, b) => {
+				let lockedA = a.lockedUntil,
+					lockedB = b.lockedUntil;
+
+				return lockedA - lockedB;
+			});
+			let timeDiff = FH.GameTime.diff(sortedSignals[0].lockedUntil);
+			$('#gildFight-Btn .hud-counter').text(moment.utc(timeDiff).format('H:mm'));
+			if (timeDiff / 60000 < 2.4) {
+					$('#gildFight-Btn .hud-counter').addClass('hud-counter-red');
+			} else
+					$('#gildFight-Btn .hud-counter').removeClass('hud-counter-red');
+
+			if (timeDiff < 0) {
+				$('#gildFight-Btn .hud-counter').text('').removeClass('hud-counter-red');
+				// sortedSignals[0] IS the province object - don't index by id,
+				// the first province of a map has no id (provinces[undefined]).
+				sortedSignals[0].signal = undefined;
+				sortedSignals[0].lockedUntil = undefined;
+			}
+		}
+		else if ($('#gildFight-Btn').length > 0 && menuSignals.length === 0)
+			$('#gildFight-Btn .hud-counter').text('').removeClass('hud-counter-red');
+	},
+
+
+	UpdateSignalProgress: (progressEl, conquestProgress) => {
+		let activeAttackers = new Set();
+
+		for (let p of conquestProgress) {
+			activeAttackers.add(p.participantId);
+
+			let span = progressEl.find(`.attacker-${p.participantId}`);
+			let length = p.progress/p.maxProgress*100;
+
+			let color = GuildFights.SortedColors?.find(e => e.id === p.participantId);
+			if (!color) continue;
+
+			if (span.length > 0) {
+				span.attr("style",`background-color:${color.main};width:${length}%;`);
+				continue;
+			}
+
+			progressEl.append(`<div class="attacker-${p.participantId}" style="background-color:${color.main};width:${length}%;"></div>`);
+		}
+
+		progressEl.find('.attack').each(function () {
+			let match = $(this).attr('class').match(/attacker-(\d+)/),
+				participantId = match ? parseInt(match[1], 10) : null;
+
+			if (participantId === null || !activeAttackers.has(participantId)) $(this).remove();
+		});
+	},
+
+
+	HandlePlayerLeaderboard: async (d) => {
+		// always have two for reference
+		if (d === undefined) return;
+		if (FH.Storage.getItem('GuildFights.NewAction') !== null) {
+			GuildFights.PrevAction = JSON.parse(FH.Storage.getItem('GuildFights.NewAction'));
+			GuildFights.PrevActionTimestamp = parseInt(FH.Storage.getItem('GuildFights.NewActionTimestamp'));
+		}
+		else if (GuildFights.NewAction !== null) {
+			GuildFights.PrevAction = GuildFights.NewAction;
+			GuildFights.PrevActionTimestamp = GuildFights.NewActionTimestamp;
+		}
+
+		let players = [];
+		let sumNegotiations = 0;
+		let sumBattles = 0;
+		let sumAttrition = 0;
+
+		for (let i in d) {
+			if (!d.hasOwnProperty(i)) break;
+
+			sumNegotiations += d[i]['negotiationsWon'] || 0;
+			sumBattles += d[i]['battlesWon'] || 0;
+			sumAttrition += d[i]['attrition'] || 0;
+
+			players.push({
+				gbground: GuildFights.CurrentGBGRound,
+				rank: i * 1 + 1,
+				player_id: d[i].player.player_id,
+				name: d[i]['player']['name'],
+				avatar: d[i]['player']['avatar'],
+				battlesWon: d[i]['battlesWon'] || 0,
+				negotiationsWon: d[i]['negotiationsWon'] || 0,
+				attrition: d[i]['attrition'] || 0
+			});
+		}
+
+		await GuildFights.UpdateDB('history', { participation: players, sumNegotiations: sumNegotiations, sumBattles: sumBattles });
+
+		// update history if there is guild data
+		if (GuildFights.GBGRoundGuilds) {
+			await GuildFights.db.history.update(
+				GuildFights.CurrentGBGRound,
+				{ guilds: GuildFights.GBGRoundGuilds }
+			);
+			GuildFights.GBGRoundGuilds = null;
+		}
+
+		GuildFights.GBGHistoryView = false;
+		GuildFights.NewAction = players;
+		FH.Storage.setItem('GuildFights.NewAction', JSON.stringify(GuildFights.NewAction));
+
+		GuildFights.NewActionTimestamp = moment().unix();
+		FH.Storage.setItem('GuildFights.NewActionTimestamp', GuildFights.NewActionTimestamp);
+
+		if ($('#GuildPlayers').length > 0) {
+			GuildFights.BuildPlayerContent(GuildFights.CurrentGBGRound);
+		}
+		else {
+			GuildFights.ShowPlayerBox();
+		}
+	},
+
+
+	HandleGuildLeaderboard: async (rankingData) => {
+		if (!GuildFights.CurrentGBGRound) return;
+
+		let participants = GuildFights.MapData?.battlegroundParticipants ?? [];
+
+		let guildHistoryData = rankingData.map(rank => {
+			let participant = participants.find(x => x.clan.id === rank.clan.id);
+			return {
+				id: rank.clan.id,
+				name: rank.clan.name,
+				flag: participant?.clan.flag ?? null,
+				points: rank.victoryPointsTotal || 0
+			}
+		});
+		let timeleft = GuildFights.CurrentGBGRound - moment().unix(),
+			isFinalDay = timeleft > 0 && timeleft <= 86400 ;
+		if (isFinalDay && (GuildFights.PlayerBoxSettings.showOverflowWarning ?? true)) {
+			GuildFights.CheckOverflow(rankingData);
+		}
+		let historyData = guildHistoryData.map(({ flag, ...data }) => data);
+
+		await GuildFights.UpdateDB('guildHistory', guildHistoryData);
+
+		GuildFights.GBGRoundGuilds = historyData;
+
+		// update history record if it already exists
+		let enrtyExists = await GuildFights.db.history.where({ gbground: GuildFights.CurrentGBGRound }).first();
+		if (enrtyExists) {
+			await GuildFights.db.history.update(
+				GuildFights.CurrentGBGRound,
+				{ guilds: historyData }
+			);
+			GuildFights.GBGRoundGuilds = null;
+		}
+
+	},
+
+
+	UpdateDB: async (content, data) => {
+		if (!GuildFights.CurrentGBGRound) return;
+
+		if (content === 'guildHistory') {
+			let gbground = GuildFights.CurrentGBGRound;
+
+			// points changed since last snapshot?!
+			let lastEntry = await GuildFights.db.guildHistory.where('gbground').equals(gbground).last();
+			let newTotal = data.reduce((sum, g) => sum + g.points, 0);
+			let lastTotal = lastEntry?.guilds.reduce((sum, g) => sum + g.points, 0) ?? -1;
+			// no new points? no new entry
+			if (lastTotal === newTotal) return;
+
+			let time = moment().startOf('hour').unix();
+
+			await GuildFights.db.guildHistory.add({ gbground, time, guilds: data });
+		}
+
+		if (content === 'history') {
+			await GuildFights.db.history.put({ 
+					gbground: GuildFights.CurrentGBGRound, 
+					sumNegotiations: data.sumNegotiations, 
+					sumBattles: data.sumBattles, 
+					participation: data.participation 
+				});
+		}
+
+		if (content === 'player') {
+			let battles = 0,
+				negotiations = 0,
+				attrition = 0;
+
+			let CurrentSnapshot = await GuildFights.db.snapshots
+				.where({
+					gbground: GuildFights.CurrentGBGRound,
+					player_id: data.player_id
+				})
+				.first();
+
+			if (CurrentSnapshot === undefined) {
+				battles = data.battles;
+				negotiations = data.negotiations;
+				attrition = data.attrition;
+			}
+			else {
+				battles = data.diffbat;
+				negotiations = data.diffneg;
+				attrition = data.diffattr;
+			}
+
+			await GuildFights.db.snapshots.add({
+				gbground: GuildFights.CurrentGBGRound,
+				player_id: data.player_id,
+				name: data.name,
+				date: parseInt(moment.unix(data.time).format("YYYYMMDD")),
+				time: data.time,
+				battles: battles,
+				negotiations: negotiations,
+				attrition: attrition,
+				totalAttrition: data.attrition
+			});
+		}
+
+	},
+
+
+	SetBoxNavigation: async (gbground) => {
+		let h = [];
+		let i = 0;
+		let PlayerBoxSettings = JSON.parse(FH.Storage.getItem('GuildFightsPlayerBoxSettings')) || '{}';
+
+		if (GuildFights.GBGAllRounds === undefined || GuildFights.GBGAllRounds === null) {
+			// get all GBG entires, skip those without participation data
+			const gbgRounds = await GuildFights.db.history.where('gbground').above(0).filter(entry => entry.participation && entry.participation.length > 0).primaryKeys();
+			gbgRounds.sort(function (a, b) { return b - a });
+			GuildFights.GBGAllRounds = gbgRounds;
+		}
+
+		// set latest GBG round to show if available and no specific GBG round is set
+		if (!gbground && GuildFights.GBGAllRounds && GuildFights.GBGAllRounds.length) {
+			gbground = GuildFights.GBGAllRounds[i];
+		}
+
+		if (gbground && GuildFights.GBGAllRounds && GuildFights.GBGAllRounds.length) {
+			let index = GuildFights.GBGAllRounds.indexOf(gbground);
+			let previousweek = GuildFights.GBGAllRounds[index + 1] || null;
+			let nextweek = GuildFights.GBGAllRounds[index - 1] || null;
+
+			h.push(`<div id="gbg_meta" class="flex between dark-bg p5">
+				<div class="flex gap">
+					<button class="btn btn-mid btn-set-week" data-week="${previousweek}"${previousweek === null ? ' disabled' : ''}>&lt;</button> 
+					<select id="gbg-select-gbground">`);
+
+					GuildFights.GBGAllRounds.forEach(week => {
+						h.push(`<option value="${week}"${gbground === week ? ' selected="selected"' : ''}>` + moment.unix(week).subtract(11, 'd').format(FH.t('Date')) + ` - ` + moment.unix(week).format(FH.t('Date')) + `</option>`);
+					});
+
+				h.push(`</select>
+					<button class="btn btn-mid btn-set-week last" data-week="${nextweek}"${nextweek === null ? ' disabled' : ''}>&gt;</button>
+				</div>`);
+
+			if (gbground === GuildFights.CurrentGBGRound) {
+				h.push(`<div id="gbgLogFilter">
+							<button class="btn btn-mid" onclick="Stats.ShowGBGCharts()">${FH.t('Boxes.GuildFights.Stats.Open')}</button>
+							<button id="gbg_filterProgressList" title="${FH.HTML.Tooltip(FH.t('Boxes.GuildFights.ProgressFilterDesc'))}" class="btn btn-mid" disabled>&#8593;</button>
+							<div class="btn-group">
+							<button id="gbg_showLog" class="btn btn-mid">${FH.t('Boxes.GuildFights.SnapshotLog')}</button>
+							<button class="btn btn-mid" onclick="GBGActionLog.toggleWindow()">${FH.t('Boxes.GBGActionLog.Button')}</button>
+							</div>
+						</div>`);
+			}
+			h.push(`</div>`);
+		}
+
+		h.push(`<div id="gbgContentWrapper"></div>`);
+
+		$('#GuildPlayersBody').html(h.join('')).promise().done(function () {
+
+			$('.btn-set-week').off().on('click', function () {
+
+				GuildFights.GBGHistoryView = true;
+				let week = $(this).data('week');
+
+				if (!GuildFights.GBGAllRounds.includes(week)) return;
+
+				GuildFights.BuildPlayerContent(week);
+			});
+
+			$('#gbg-select-gbground').off().on('change', function () {
+				GuildFights.GBGHistoryView = true;
+				let week = parseInt($(this).val());
+
+				if (!GuildFights.GBGAllRounds.includes(week) || week === GuildFights.CurrentGBGRound) return;
+
+				GuildFights.BuildPlayerContent(week);
+			});
+
+			$('button#gbg_showLog').off('click').on('click', function () {
+				GuildFights.curDetailViewFilter = { content: 'filter', gbground: GuildFights.CurrentGBGRound };
+				GuildFights.ShowDetailViewBox(GuildFights.curDetailViewFilter)
+			});
+
+			$('button#gbg_filterProgressList').on('click', function () {
+				GuildFights.ToggleProgressList('gbg_filterProgressList');
+			});
+		});
+
+	},
+
+
+	ToggleProgressList: (id) => {
+		let elem = $('#GuildPlayersTable > tbody');
+		let nelem = elem.find('tr.new');
+		let act = $('#' + id).hasClass('filtered') ? 'show' : 'hide';
+
+		if (act === 'hide') {
+			if (nelem.length !== 0) {
+				let oelem = elem.find('tr:not(.new)');
+				GuildFights.PlayerBoxSettings.showOnlyActivePlayers = 1;
+				FH.Storage.setItem('GuildFightsPlayerBoxSettings', JSON.stringify(GuildFights.PlayerBoxSettings));
+				$('#GuildPlayersTable > thead .text-warning').hide();
+				oelem.hide();
+				$('#' + id).addClass('filtered btn-green');
+			}
+		}
+
+		else if (act === 'show') {
+			elem.find('tr').show();
+			GuildFights.PlayerBoxSettings.showOnlyActivePlayers = 0;
+			FH.Storage.setItem('GuildFightsPlayerBoxSettings', JSON.stringify(GuildFights.PlayerBoxSettings));
+			$('#GuildPlayersTable > thead .text-warning').show();
+			$('#' + id).removeClass('filtered btn-green');
+		}
+	},
+
+
+	SetTabs: (id) => {
+		GuildFights.Tabs.push('<li class="' + id + ' game-cursor"><a href="#' + id + '" class="game-cursor"><span>&nbsp;</span></a></li>');
+	},
+
+
+	GetTabs: () => {
+		return '<ul class="horizontal dark-bg">' + GuildFights.Tabs.join('') + '</ul>';
+	},
+
+
+	SetTabContent: (id, content) => {    
+		let cls = GuildFights.TabsContent.length > 0 ? ' class="hidden-tab"' : '';
+    	GuildFights.TabsContent.push('<div id="' + id + '"' + cls + '>' + content + '</div>');
+	},
+
+
+	GetTabContent: () => {
+		return GuildFights.TabsContent.join('');
+	},
+
+
+	GetAlertButton: (provId) => {
+		let btn;
+		if (GuildFights.Alerts.find((a) => a.provId == provId) !== undefined) {
+			btn = `<button class="btn btn-slim btn-delete deletealertbutton" data-id="${provId}" data-original-title="${FH.t('Boxes.GuildFights.DeleteAlert')}"></button>`;
+		}
+		else {
+			btn = `<button class="btn btn-slim setalertbutton" data-id="${provId}" data-original-title="${FH.t('Boxes.GuildFights.SetAlert')}"></button>`;
+		}
+		return btn;
+	},
+
+	RefreshAlertButtons: (provId) => {
+		$(`.setalertbutton[data-id="${provId}"], .deletealertbutton[data-id="${provId}"]`).each(function () {
+			$(this).replaceWith(GuildFights.GetAlertButton(provId));
+		});
+		$(`[data-id="${provId}"][data-original-title]`).tooltip({container: 'body'});
+		$('.tooltip').remove();
+	},
+
+
+	/**
+	 * Creates the box with the data
+	 */
+	ShowGuildBox: (reload) => {
+		if ($('#LiveGuildFighting').length === 0) {
+			FH.HTML.Box({
+				id: 'LiveGuildFighting',
+				title: FH.t('Menu.Gildfight.Title'),
+				auto_close: true,
+				dragdrop: true,
+				resize: true,
+				minimize: true,
+				settings: GuildFights.ShowLiveFightSettings,
+				custom_buttons: [{class: "window-refresh", callback: GuildFights.BuildFightContent}]
+			    //active_maps:"gg"
+			});
+
+			FH.HTML.AddCssFile('guildfights');
+		}
+		else if (!reload) {
+			FH.HTML.CloseOpenBox('LiveGuildFighting');
+			return;
+		}
+
+		GuildFights.BuildFightContent();
+	},
+
+
+	/**
+	 * Shows the player overview
+	 */
+	ShowPlayerBox: () => {
+		if ($('#GuildPlayers').length === 0) {
+			FH.HTML.Box({
+				id: 'GuildPlayers',
+				title: FH.t('Boxes.GuildFights.Title'),
+				auto_close: true,
+				dragdrop: true,
+				minimize: true,
+				resize: true,
+				settings: GuildFights.ShowPlayerBoxSettings,
+			    active_maps:"gg",
+			});
+			FH.HTML.AddCssFile('guildfights');
+		}
+			
+		if (Settings.GetSetting('ShowGBGPlayerInfo') == false) {
+			$('#GuildPlayers').css({'display': 'none'})
+		}
+
+		GuildFights.BuildPlayerContent(GuildFights.CurrentGBGRound);
+	},
+
+
+	/**
+	 * Generates the snapshot detail box
+	 */
+	ShowDetailViewBox: (d) => {
+		if ($('#GuildPlayersDetailView').length === 0) {
+			let ptop = null,
+				pright = null;
+
+			FH.HTML.Box({
+				id: 'GuildPlayersDetailView',
+				title: FH.t('Boxes.GuildFights.SnapshotLog'),
+				auto_close: true,
+				dragdrop: true,
+				minimize: true,
+				resize: true,
+			    active_maps:"gg"
+			});
+		}
+
+		GuildFights.BuildDetailViewContent(d);
+	},
+
+
+	/**
+	 * Build the player content
+	 * @returns {Promise<void>}
+	 */
+	BuildPlayerContent: async (gbground) => {
+		let newRound = false;
+		let updateDetailView = false;
+
+		await GuildFights.SetBoxNavigation(gbground);
+
+		let CurrentSnapshot = await GuildFights.db.snapshots
+			.where({
+				gbground: GuildFights.CurrentGBGRound
+			})
+			.first();
+
+		if (CurrentSnapshot === undefined) {
+			newRound = true;
+			// if there is a new GBG round delete previous snapshots
+			GuildFights.DeleteOldSnapshots(GuildFights.CurrentGBGRound);
+		}
+
+		let t = [],
+			b = [],
+			tN = 0,
+			tF = 0,
+			tA = 0,
+			histView = false;
+
+		GuildFights.PlayerBoxContent = [];
+
+		GuildFights.PlayerBoxContent.push({
+			player_id: 'player_id',
+			player: 'player',
+			negotiationsWon: 'negotiations',
+			battlesWon: 'battles',
+			attrition: 'attrition',
+			total: 'total'
+		});
+
+		if (gbground && gbground !== null && gbground !== GuildFights.CurrentGBGRound) {
+			let d = await GuildFights.db.history.where({ gbground: gbground }).toArray();
+			GuildFights.GBGRound = d[0].participation.sort(function (a, b) {
+				return a.rank - b.rank;
+			});
+			histView = true;
+		}
+		else {
+			GuildFights.GBGRound = GuildFights.NewAction;
+		}
+
+		for (let i in GuildFights.GBGRound) {
+			if (!GuildFights.GBGRound.hasOwnProperty(i)) break;
+
+			let playerNew = GuildFights.GBGRound[i];
+
+			let fightAddOn = '',
+				negotaionAddOn = '',
+				attritionAddOn = '',
+				diffNegotiations = 0,
+				diffBattles = 0,
+				diffAttr = 0,
+				newProgressClass = '',
+				change = false;
+
+			// is there an older snapshot available?
+			if (GuildFights.PrevAction !== null && histView === false) {
+
+				let playerOld = GuildFights.PrevAction.find(p => (p['player_id'] === playerNew['player_id']));
+
+				// Is there any data on this player?
+				if (playerOld !== undefined) {
+
+					if (playerOld['negotiationsWon'] < playerNew['negotiationsWon']) {
+						diffNegotiations = playerNew['negotiationsWon'] - playerOld['negotiationsWon'];
+						negotaionAddOn = ' <small class="text-success">&#8593; ' + diffNegotiations + '</small>';
+						change = true;
+					}
+
+					if (playerOld['battlesWon'] < playerNew['battlesWon']) {
+						diffBattles = playerNew['battlesWon'] - playerOld['battlesWon'];
+						fightAddOn = ' <small class="text-success">&#8593; ' + diffBattles + '</small>';
+						change = true;
+					}
+
+					if (playerOld['attrition'] < playerNew['attrition']) {
+						diffAttr = playerNew['attrition'] - playerOld['attrition'];
+						attritionAddOn = ' <small class="text-success">&#8593; ' + diffAttr + '</small>';
+						change = true;
+					}
+				}
+			}
+
+			if ((change === true || newRound === true) && GuildFights.GBGHistoryView === false) {
+				await GuildFights.UpdateDB('player', { 
+						gbground: GuildFights.CurrentGBGRound, 
+						player_id: playerNew['player_id'], 
+						name: playerNew['name'], 
+						battles: playerNew['battlesWon'], 
+						negotiations: playerNew['negotiationsWon'], 
+						attrition: playerNew['attrition'], 
+						diffbat: diffBattles, 
+						diffneg: diffNegotiations, 
+						diffattr: diffAttr,
+						time: moment().unix() 
+					});
+				updateDetailView = true;
+			}
+
+			newProgressClass = change && !newRound ? 'new ' : '';
+
+			tN += playerNew['negotiationsWon'];
+			tF += playerNew['battlesWon'];
+			tA += playerNew['attrition']
+
+			b.push('<tr data-player="' + playerNew['player_id'] + '" data-gbground="' + gbground + '" class="' + newProgressClass + (!histView ? 'showdetailview ' : '') + (playerNew['player_id'] === FH.Player.ID ? 'mark-row ' : '') + (change === true ? 'bg-green' : '') + '">');
+			b.push('<td style="display:none;">' + playerNew.player_id + '.</td>');
+
+			b.push('<td class="tdmin">' + (parseInt(i) + 1) + '.</td>');
+			b.push('<td class="tdmin"><img src="' + srcLinks.GetPortrait(playerNew['avatar']) + '" alt=""></td>');
+			b.push('<td>' + playerNew['name'] + '</td>');
+			b.push('<td class="text-center">');
+			b.push(playerNew['negotiationsWon'] + negotaionAddOn);
+			b.push('</td>');
+
+			b.push('<td class="text-center">');
+			b.push(playerNew['battlesWon'] + fightAddOn);
+			b.push('</td>');
+
+			b.push('<td class="text-center">');
+			let both = playerNew['battlesWon'] + (playerNew['negotiationsWon'] * 2);
+			b.push(both);
+			b.push('</td>');
+
+			b.push('<td class="text-center">');
+			b.push(playerNew['attrition'] + attritionAddOn);
+			b.push('</td>');
+
+			b.push('<td></td>');
+			b.push('</tr>');
+
+			GuildFights.PlayerBoxContent.push({
+				player_id: playerNew['player_id'],
+				player: playerNew['name'],
+				negotiationsWon: playerNew['negotiationsWon'],
+				battlesWon: playerNew['battlesWon'],
+				attrition: playerNew['attrition'],
+				total: both
+			})
+		}
+
+		// Update DetailView if there are changes and DetailView is open
+		if ($('#GuildPlayersDetailView').length !== 0 && updateDetailView === true) {
+			GuildFights.BuildDetailViewContent(GuildFights.curDetailViewFilter);
+		}
+
+		let tNF = (tN * 2) + tF;
+
+		if (histView) {
+			let GuildResults = await GuildFights.db.guildHistory
+			.where({
+				gbground: gbground
+			})
+			.last();
+
+			if (GuildResults?.guilds) {
+				t.push(`<div class="fham-accordion">
+				<h2 class="fham-accordion-head">${FH.t('Boxes.GuildFights.GuildResults')}</h2>
+				<div class="fham-accordion-body">
+				<table class="foe-table">`);
+				let i = 0;
+				for (let guild of GuildResults.guilds) {
+					t.push(`<tr ${FH.Guild.ID === guild.id ? 'class="mark-row"':''}>
+						<td class="tdmin">${++i}</td>
+						<td class="tdmin"><img src="${srcLinks.get('/shared/clanflags/' + guild.flag.toLowerCase() + '.jpg', true)}" /></td>
+						<td>${guild.name}</td>
+						<td class="text-right">${FH.HTML.Format(guild.points)}</td>
+						</tr>`);
+				}
+				t.push(`</table></div></div>`);
+			}
+		}
+
+		t.push('<table id="GuildPlayersTable" class="exportable foe-table' + (histView === false ? ' chevron-right' : '') + '">');
+
+		t.push(`<thead class="sticky"> 
+				<tr>
+				<th style="display:none;" data-export="Player_ID"></th>`);
+		t.push('<th colspan="3" data-export3="Player">' + FH.t('Boxes.GuildFights.Player') + '</th>');
+		t.push('<th class="text-center" data-export="Negotiations"><span class="negotiation" title="' + FH.HTML.Tooltip(FH.t('Boxes.GuildFights.Negotiations')) + '"></span> <strong class="text-warning">(' + FH.HTML.Format(tN) + ')</strong></th>');
+		t.push('<th class="text-center" data-export="Fights"><span class="fight" title="' + FH.HTML.Tooltip(FH.t('Boxes.GuildFights.Fights')) + '"></span> <strong class="text-warning">(' + FH.HTML.Format(tF) + ')</strong></th>');
+		t.push('<th class="text-center" data-export="Total"> <img class="game-cursor" alt="'+FH.t('General.Total')+'" src="' + FH.extUrl + 'js/web/x_img/gbg-sum.png"> <strong class="text-warning">(' + FH.HTML.Format(tNF) + ')</strong></th>');
+		t.push('<th class="text-center" data-export="Attrition"> <img class="game-cursor" alt="'+FH.t('Boxes.GuildFights.Attrition')+'" src="' + FH.extUrl + 'js/web/x_img/attrition.png"> <strong class="text-warning">(' + FH.HTML.Format(tA) + ')</strong></th>');
+
+		t.push('<th></th>');
+		t.push('</tr>');
+		t.push('</thead>');
+
+		t.push('<tbody>');
+		t.push(b.join(''));
+		t.push('</tbody>');
+
+		$('#gbgContentWrapper').html(t.join('')).promise().done(function () {
+			$('#GuildPlayersBody .fham-accordion-head').on('click',function (event) {
+				let $this = $(event.target).parent('.fham-accordion'),
+					isOpen = $this.hasClass('open');
+
+				$('#GuildPlayersBody .fham-accordion').removeClass('open');
+
+				if(!isOpen){
+					$this.addClass('open');
+				}
+			});
+			$('#GuildPlayersBody tr.showdetailview').off('click').on('click', function () {
+				let player_id = $(this).data('player');
+				let gbground = $(this).data('gbground');
+
+				GuildFights.curDetailViewFilter = { content: 'player', player_id: player_id, gbground: gbground };
+
+				if ($('#GuildPlayersDetailView').length === 0) {
+					GuildFights.ShowDetailViewBox(GuildFights.curDetailViewFilter);
+				}
+				else {
+					GuildFights.BuildDetailViewContent(GuildFights.curDetailViewFilter);
+				}
+			});
+
+			$("#GuildPlayers").on("remove", function () {
+				if ($('#GuildPlayersDetailView').length !== 0)
+				{
+					$('#GuildPlayersDetailView').fadeOut(50, function () {
+						$(this).remove();
+					});
+				}
+			});
+
+			// check if member has a new progress
+			let newPlayer = $('#GuildPlayersTable tbody').find('tr.new').length;
+			if (newPlayer > 0) {
+				$('button#gbg_filterProgressList').html('&#8593; ' + newPlayer);
+				$('button#gbg_filterProgressList').attr("disabled", false);
+
+				if (GuildFights.PlayerBoxSettings.showOnlyActivePlayers === 1) {
+					GuildFights.ToggleProgressList('gbg_filterProgressList');
+				}
+			}
+		});
+
+		if ($('#GuildPlayersHeader .title').find('.time-diff').length === 0)
+		{
+			$('#GuildPlayersHeader .title').append($('<small />').addClass('time-diff'));
+		}
+
+		// es gibt schon einen Snapshot vorher
+		if (GuildFights.PrevActionTimestamp !== null)
+		{
+
+			let start = moment.unix(GuildFights.PrevActionTimestamp),
+				end = moment.unix(GuildFights.NewActionTimestamp),
+				duration = moment.duration(end.diff(start));
+
+			let time = duration.humanize();
+
+			$('.time-diff').text(
+				FH.helper.str.Replacer(FH.t('Boxes.GuildFights.LastSnapshot'), { time: time })
+			);
+		}
+	},
+
+
+	/**
+	 * @returns {Promise<void>}
+	 */
+	BuildDetailViewContent: async (d) => {
+
+		let player_id = d.player_id ? d.player_id : null,
+			content = d.content ? d.content : 'player',
+			gbground = d.gbground ? d.gbground : GuildFights.CurrentGBGRound,
+			playerName = null,
+			dailyFights = [],
+			detaildata = [],
+			sumN = 0,
+			sumF = 0,
+			h = [];
+
+		if (player_id === null && content === "player") return;
+
+		if (content === "player") {
+			detaildata = await GuildFights.db.snapshots.where({ gbground: gbground, player_id: player_id }).toArray();
+
+			playerName = detaildata[0].name;
+			dailyFights = detaildata.reduce(function (res, obj) {
+				let date = moment.unix(obj.time).format('YYYYMMDD');
+
+				if (!(date in res)) {
+					res.__array.push(res[date] = { date: date, time: obj.time, battles: obj.battles, negotiations: obj.negotiations, attrition: obj.attrition || 0, totalAttrtion: obj.totalAttrition || 0 });
+				}
+				else {
+					res[date].battles += +obj.battles;
+					res[date].negotiations += +obj.negotiations;
+					res[date].attrition += +(obj.attrition || 0);
+					res[date].totalAttrtion =  obj.totalAttrition || 0;
+				}
+				return res;
+			}, { __array: [] }).__array.sort(function (a, b) { return b.date - a.date });
+
+			h.push('<div class="pname dark-bg text-center">' + playerName + ': ' + moment.unix(gbground).subtract(11, 'd').format(FH.t('DateShort')) + ` - ` + moment.unix(gbground).format(FH.t('Date')) + '</div>');
+			h.push('<p class="dark-bg" style="padding:5px;margin:0;">' + FH.t('Boxes.GuildFights.SnapShotLogDisclaimer') + '</p>')
+			h.push('<table id="gbgPlayerLogTable" class="foe-table gbglog"><thead class="sticky">');
+			h.push('<tr class="sorter-header">');
+			h.push('<th class="is-number" data-type="gbg-playerlog-group">' + FH.t('Boxes.GuildFights.Date') + '</th>');
+			h.push('<th class="is-number text-center" data-type="gbg-playerlog-group"><span class="negotiation" title="' + FH.HTML.Tooltip(FH.t('Boxes.GuildFights.Negotiations')) + '"></span></th>');
+			h.push('<th class="is-number text-center" data-type="gbg-playerlog-group"><span class="fight" title="' + FH.HTML.Tooltip(FH.t('Boxes.GuildFights.Fights')) + '"></span></th>');
+			h.push(`<th class="is-number text-center" data-type="gbg-playerlog-group"><img class="game-cursor" title="${FH.t('General.Total')}" src="${FH.extUrl}js/web/x_img/gbg-sum.png"></th>
+				<th class="is-number text-center" data-type="gbg-playerlog-group"><img class="game-cursor" title="${FH.t('Boxes.GuildFights.Attrition')}" src="${FH.extUrl}js/web/x_img/attrition.png"></th>
+			</tr>
+			</thead><tbody class="gbg-playerlog-group">`);
+
+			dailyFights.forEach(day => {
+				let id = moment.unix(day.time).format(FH.t('DateTime'));
+				let sum = (day.battles + day.negotiations * 2);
+				h.push(`<tr id="gbgdetail_${id}" data-gbground="${gbground}" data-player="${player_id}" data-id="${id}">
+					<td class="is-number" data-number="${day.time}">${moment.unix(day.time).format(FH.t('Date'))}</td>
+					<td class="is-number text-center" data-number="${day.negotiations}">${FH.HTML.Format(day.negotiations)}</td>
+					<td class="is-number text-center" data-number="${day.battles}">${FH.HTML.Format(day.battles)}</td>
+					<td class="is-number text-center" data-number="${sum}">${FH.HTML.Format(sum)}</td>
+					<td class="is-number text-center" data-number="${day.totalAttrtion}">${FH.HTML.Format(day.totalAttrtion)}</td>
+				</tr>`);
+			});
+
+			h.push('</tbody></table>');
+		}
+		else if (content === "filter") {
+			detaildata = await GuildFights.db.snapshots.where({ gbground: gbground }).and(function (item) {
+				return (item.date >= GuildFights.curDateFilter && item.date <= GuildFights.curDateEndFilter)
+			}).toArray();
+
+			detaildata.sort(function (a, b) { return b.time - a.time });
+
+			h.push('<div class="datetimepicker sticky"><button id="gbgLogDatepicker" class="btn">' + GuildFights.formatRange() + '</button></div>');
+			h.push('<table id="GuildFightsLogTable" class="foe-table gbglog"><thead>');
+			h.push('<tr class="sorter-header">');
+			h.push('<th class="is-number" data-type="gbg-log-group">' + FH.t('Boxes.GuildFights.Date') + '</th>');
+			h.push('<th class="case-sensitive" data-type="gbg-log-group">' + FH.t('Boxes.GuildFights.Player') + '</th>');
+			h.push('<th class="is-number text-center" data-type="gbg-log-group"><span class="negotiation" title="' + FH.HTML.Tooltip(FH.t('Boxes.GuildFights.Negotiations')) + '"></span></th>');
+			h.push('<th class="is-number text-center" data-type="gbg-log-group"><span class="fight" title="' + FH.HTML.Tooltip(FH.t('Boxes.GuildFights.Fights')) + '"></span></th>');
+			h.push(`<th class="is-number text-center" data-type="gbg-log-group">${FH.t('General.Total')}</th>`);
+			h.push(`<th class="is-number text-center" data-type="gbg-log-group">${FH.t('Boxes.GuildFights.Attrition')}</th>`);
+			h.push('</tr>');
+			h.push('</thead><tbody class="gbg-log-group">');
+
+			let lastDataId = 0;
+			detaildata.forEach(e => {
+				sumN += e.negotiations;
+				sumF += e.battles;
+				let sum = (e.battles + e.negotiations * 2);
+				h.push(`<tr  ${e.time === lastDataId ? '' : 'class="spacer"'} data-id="${e.time}" id="gbgtime_${e.time}">`);
+				h.push(`<td class="is-number" data-number="${e.time}">${moment.unix(e.time).format(FH.t('DateTime'))}</td>`);
+				h.push(`<td class="case-sensitive" data-text="${FH.helper.str.cleanup(e.name)}">${e.name}</td>`);
+				h.push(`<td class="is-number text-center" data-number="${e.negotiations}">${FH.HTML.Format(e.negotiations)}</td>`);
+				h.push(`<td class="is-number text-center" data-number="${e.battles}">${FH.HTML.Format(e.battles)}</td>`);
+				h.push(`<td class="is-number text-center" data-number="${sum}">${FH.HTML.Format(sum)}</td>`);
+				h.push(`<td class="is-number text-center" data-number="${e.attrition || 0}">${FH.HTML.Format(e.attrition || 0)}</td>`);
+				h.push('</tr>');
+				lastDataId = e.time;
+			});
+
+			h.push('</tbody></table>');
+		}
+
+		$('#GuildPlayersDetailViewBody').html(h.join('')).promise().done(function () {
+
+			$('#GuildPlayersDetailViewBody .gbglog').tableSorter();
+
+			if ($('#gbgLogDatepicker').length !== 0) {
+				GuildFights.intiateDatePicker();
+			}
+			$('#GuildPlayersDetailViewBody tr.sorter-header').on('click', function () {
+				$(this).parents('.foe-table').find('tr.open').removeClass("open");
+
+			});
+
+			$('#GuildPlayersDetailViewBody > .foe-table tr').on('click', function () {
+
+				if ($(this).next("tr.detailview").length) {
+					$(this).next("tr.detailview").remove();
+					$(this).removeClass('open');
+				}
+				else {
+					if (!$(this).hasClass("hasdetail")) {
+						return;
+					}
+
+					let date = $(this).data("id");
+					let player = $(this).data("player");
+					let awidth = $(this).find('td:first-child').width();
+					let bwidth = $(this).find('td:nth-child(2)').width();
+					let cwidth = $(this).find('td:nth-child(3)').width();
+					let dwidth = $(this).find('td:nth-child(4)').width();
+					let ewidth = $(this).find('td:last-child').width();
+
+					$(this).addClass('open');
+
+					GuildFights.BuildDetailViewLog({ date: date, player: player, width: { a: awidth, b: bwidth, c: cwidth, d: dwidth, e: ewidth } });
+				}
+			});
+
+		});
+	},
+
+
+	/**
+	 * @returns {Promise<void>}
+	 */
+	DeleteOldSnapshots: async (gbground) => {
+		let deleteCount = await GuildFights.db.snapshots.where("gbground").notEqual(gbground).delete();
+	},
+
+
+	/**
+	 * @returns {Promise<void>}
+	 */
+	BuildDetailViewLog: async (data) => {
+		let h = [];
+		let d = await GuildFights.db.snapshots.where({ player_id: data.player, date: data.date }).reverse().sortBy('date');
+
+		if (!d) return;
+
+		if (!data.width) {
+			data.width = { a: 50, b: 20, c: 20, d: 20 }
+		}
+
+		h.push(`<tr class="detailview dark-bg"><td class="nopadding" colspan="${$('#GuildPlayersDetailViewBody > .foe-table thead tr').find("th").length}"><table class="foe-table log"><body>`);
+
+		d.forEach(e => {
+			h.push(`<tr>`);
+			h.push(`<td style="width: ${data.width.a}px">${moment.unix(e.time).format(FH.t('DateTime'))}</td>`);
+			h.push(`<td style="width: ${data.width.b}px" class="text-center">${e.negotiations}</td>`);
+			h.push(`<td style="width: ${data.width.c}px" class="text-center">${e.battles}</td>`);
+			h.push(`<td style="width: ${data.width.d}px" class="text-center">${(e.battles + e.negotiations * 2)}</td>`);
+			h.push(`<td style="width: ${data.width.e}px" class="text-center">${e.attrition || 0}</td>`);
+			h.push(`</tr>`);
+		});
+
+		h.push(`</tbody></table></td></tr>`);
+
+		$(h.join('')).insertAfter($('#gbgdetail_' + data.date));
+	},
+
+
+	/**
+	 * Contents of the card box
+	 */
+	BuildFightContent: () => {
+		GuildFights.Tabs = [];
+		GuildFights.TabsContent = [];
+
+		GuildFights.SetTabs('gbgnextup');
+		GuildFights.SetTabs('gbgprogress');
+		GuildFights.SetTabs('gbgowned');
+
+		let progress = [], nextup = [],
+			LiveFightSettings = JSON.parse(FH.Storage.getItem('LiveFightSettings'));
+
+		GuildFights.showGuildColumn = (LiveFightSettings && LiveFightSettings.showGuildColumn !== undefined) ? LiveFightSettings.showGuildColumn : 0;
+
+		let mapdata = GuildFights.MapData['map']['provinces'];
+		for (let i in mapdata) {
+			if (!mapdata.hasOwnProperty(i)) break;
+
+			let id = mapdata[i]['id'];
+			mapdata[i].neighbor = [];
+			let linkIDs = ProvinceMap.ProvinceData().find(e => e['id'] === id)['connections'];
+
+			for (let x in linkIDs) {
+				if (!linkIDs.hasOwnProperty(x)) {
+					continue;
+				}
+
+				let neighborID = GuildFights.MapData['map']['provinces'].find(e => e['id'] === linkIDs[x]);
+
+				if (neighborID['ownerId']) {
+					mapdata[i]['neighbor'].push(neighborID['ownerId']);
+				}
+			}
+		}
+
+		// Both builders below start one interval per row - drop the previous
+		// batch first, otherwise every rebuild stacks another ~60 live timers.
+		GuildFights.ClearCounterIntervals();
+
+		nextup = GuildFights.BuildNextUpTab();
+		progress = GuildFights.BuildProgressTab();
+		owned = GuildFights.BuildOwnedTab();
+
+		GuildFights.SetTabContent('gbgnextup', nextup.join(''));
+		GuildFights.SetTabContent('gbgprogress', progress.join(''));
+		GuildFights.SetTabContent('gbgowned', owned.join(''));
+
+		let h = [];
+
+		h.push(`<div class="btn-group">
+			<button class="btn btn-slim copybutton all" onclick="GuildFights.CopyToClipBoard(event)">${FH.t('Boxes.GuildFights.SelectAll')}</button>
+			<button class="btn btn-slim dcbutton discord custom" onclick="GuildFights.PrepareForDiscord(event)" data-original-title="${FH.t('Boxes.GuildFights.DiscordSendSelectionCustom')}" style="display:none;"></button>
+			<button class="btn btn-slim dcbutton discord" onclick="GuildFights.PrepareForDiscord(event)" data-original-title="${FH.t('Boxes.GuildFights.DiscordSendSelection')}" style="display:none;"></button>
+			<button class="btn btn-slim mapbutton" onclick="ProvinceMap.build()">${FH.t('Boxes.GuildFights.OpenMap')}</button>
+			</div>
+		</div>`);
+		h.push('<div class="gbg-tabs tabs">');
+		h.push(GuildFights.GetTabs());
+		h.push(GuildFights.GetTabContent());
+
+		let activeTab = 1;
+		if ($('.gbgprogress.active').length > 0) activeTab = 2;
+
+		$('#LiveGuildFighting').find('#LiveGuildFightingBody').html(h.join('')).promise().done(function () {
+			$('.gbg-tabs').tabslet({ active: activeTab });
+
+			$('.gbg-tabs').on('_after', (e) => {
+				GuildFights.ToggleCopyButton();
+			});
+			$('#nextup').on('click', '.deletealertbutton', function (e) {
+				GuildFights.DeleteAlert($(this).data('id'));
+				e.stopPropagation();
+			});
+			$('#nextup').on('click', '.setalertbutton', function (e) {
+				GuildFights.SetAlert($(this).data('id'));
+				e.stopPropagation();
+			});
+			$('#nextup').on('click', 'tr', function () {
+				$(this).toggleClass('highlight-row');
+				GuildFights.ToggleCopyButton();
+			});
+			// in BuildFightContent(), inside .promise().done(), alongside the existing delegated listeners:
+			$('#LiveGuildFightingBody .gbg-tabs').on('mouseenter', 'tr', function (e) {
+				if (ProvinceMap.selectedProvince?.owner) {
+					ProvinceMap.selectedProvince.isSelected = false;
+					ProvinceMap.selectedProvince.updateMapSector();
+				}
+
+				let pId = $(this).attr("data-id");
+				ProvinceMap.selectedProvince = ProvinceMap.Provinces[pId] || null;
+				if (ProvinceMap.selectedProvince?.owner) {
+					ProvinceMap.selectedProvince.isSelected = true;
+					ProvinceMap.selectedProvince.updateMapSector();
+				}
+			}).on('mouseleave', 'tr', function () {
+				if (ProvinceMap.selectedProvince?.owner) {
+					ProvinceMap.selectedProvince.isSelected = false;
+					ProvinceMap.selectedProvince.updateMapSector();
+				}
+				ProvinceMap.selectedProvince = null;
+			});
+			$('[data-original-title]').tooltip({container: 'body'});
+			$('#LiveGuildFighting #gbgowned table').tableSorter();
+		});
+	},
+
+
+	BuildProgressTab: function() {
+		let progress = [],
+			mapdata = GuildFights.MapData['map']['provinces'],
+			gbgGuilds = GuildFights.MapData['battlegroundParticipants'];
+
+		progress.push('<div id="progress"><table class="foe-table">');
+		progress.push('<thead><tr>');
+		progress.push('<th class="prov-name" style="user-select:text">' + FH.t('Boxes.GuildFights.Province') + '</th>');
+
+		if (GuildFights.showGuildColumn) {
+			progress.push('<th>' + FH.t('Boxes.GuildFights.Owner') + '</th>');
+		}
+
+		progress.push('<th colspan="2">' + FH.t('Boxes.GuildFights.Progress') + ' / ' + FH.t('Boxes.GuildFights.RequiredProgress') + '</th>');
+		progress.push('</tr></thead><tbody>');
+
+		for (let i in mapdata) {
+			if (!mapdata.hasOwnProperty(i)) break;
+			let id = mapdata[i].id || 0;
+			let signalClass = mapdata[i].signal || '';
+
+			for (let x in gbgGuilds) {
+				if (!gbgGuilds.hasOwnProperty(x)) break;
+
+				if (mapdata[i].ownerId !== undefined && gbgGuilds[x].participantId === mapdata[i].ownerId) {
+					if (mapdata[i]['conquestProgress'].length > 0 && (mapdata[i]['lockedUntil'] === undefined)) {
+						let pColor = ProvinceMap.getSectorColors(mapdata[i]['ownerId']);
+						let provinceProgress = mapdata[i]['conquestProgress'];
+
+						progress.push(`<tr class="${signalClass}" id="province-${id}" data-id="${id}" data-tab="progress">`);
+						progress.push(`<td title="${FH.t('Boxes.GuildFights.Owner')}: ${gbgGuilds[x]['clan']['name']}"><b><span class="province-color" style="background-color:${pColor['main']};border-color:${pColor['base']}"></span> ${mapdata[i]['title']}</b></td>`);
+
+						if (GuildFights.showGuildColumn) 
+							progress.push(`<td>${gbgGuilds[x]['clan']['name']}</td>`);
+						
+						progress.push(`<td data-field="${id}-${mapdata[i]['ownerId']}" class="guild-progress">`);
+
+						let currentMaxProgress = 0;
+						for (let y in provinceProgress) {
+							if (!provinceProgress.hasOwnProperty(y)) break;
+							if (provinceProgress[y]['progress'] > currentMaxProgress)
+								currentMaxProgress = provinceProgress[y]['progress'];
+
+							let color = ProvinceMap.getSectorColors(provinceProgress[y]['participantId']);
+							let progressBar = provinceProgress[y]['progress'] / mapdata[i]['conquestProgress'][0].maxProgress * 100;
+							progress.push(`<span class="attacker-${provinceProgress[y]['participantId']} progress" style="background-color:${color['main']};border-color:${color['base']};width:${progressBar}%">${provinceProgress[y]['progress']}</span>`);
+						}
+
+						progress.push(`</td><td data-field="${id}" class="tdmin wsnw text-right required-progress">${currentMaxProgress} / ` + mapdata[i]['conquestProgress'][0].maxProgress + '</td>');
+					}
+				}
+			}
+
+			// If sectors doesnt belong to anyone
+			if (mapdata[i]['ownerId'] === undefined && mapdata[i]['conquestProgress'].length > 0) {
+				progress.push(`<tr class="${signalClass}" id="province-${id}" data-id="${id}" data-tab="progress">`);
+				progress.push(`<td><b><span class="province-color" style="background-color:#555"></span> ${mapdata[i]['title']}</b></td>`);
+
+				if (GuildFights.showGuildColumn)
+					progress.push(`<td><em>${FH.t('Boxes.GuildFights.NoOwner')}</em></td>`);
+
+				progress.push('<td data-field="' + id + '" class="guild-progress">');
+
+				let provinceProgress = mapdata[i]['conquestProgress'];
+
+				let currentMaxProgress = 0;
+				for (let y in provinceProgress) {
+					if (!provinceProgress.hasOwnProperty(y)) break;
+					if (provinceProgress[y]['progress'] > currentMaxProgress)
+						currentMaxProgress = provinceProgress[y]['progress'];
+
+					let color = GuildFights.SortedColors.find(e => e['id'] === provinceProgress[y]['participantId']);
+					let progressBar = provinceProgress[y]['progress'] / mapdata[i]['conquestProgress'][0].maxProgress * 100;
+					progress.push(`<span class="attacker-${provinceProgress[y]['participantId']} progress" style="background-color:${color['main']};border-color:${color['base']};width:${progressBar}%">${provinceProgress[y]['progress']}</span>`);
+				}
+
+				progress.push(`</td><td data-field="${id}" class="tdmin wsnw text-right required-progress">${currentMaxProgress} / ` + + mapdata[i]['conquestProgress'][0].maxProgress + '</td>');
+			}
+		}
+
+		progress.push('</tbody>');
+		progress.push('</table></div>');
+
+		return progress;
+	},
+
+
+	BuildNextUpTab: function() {
+		let nextup = [],
+			mapdata = GuildFights.MapData.map.provinces,
+			gbgGuilds = GuildFights.MapData['battlegroundParticipants'],
+			own = gbgGuilds.find(e => e.clan.id === FH.Guild.ID),
+			LiveFightSettings = JSON.parse(FH.Storage.getItem('LiveFightSettings'));
+
+		GuildFights.showAdjacentSectors = (LiveFightSettings && LiveFightSettings.showAdjacentSectors !== undefined) ? LiveFightSettings.showAdjacentSectors : 1;
+		GuildFights.showOwnSectors = (LiveFightSettings && LiveFightSettings.showOwnSectors !== undefined) ? LiveFightSettings.showOwnSectors : 0;
+
+		nextup.push(`<div id="nextup"><table class="foe-table">
+			<thead><tr>
+			<th class="prov-name">${FH.t('Boxes.GuildFights.Province')}</th>`);
+
+		if (GuildFights.showGuildColumn) 
+			nextup.push('<th>' + FH.t('Boxes.GuildFights.Owner') + '</th>');
+		
+		nextup.push(`<th class="time-static w-small">${FH.t('Boxes.GuildFights.Time')}</th>
+				<th class="w-small">${FH.t('Boxes.GuildFights.Count')}</th>
+				<th></th>
+				<th></th>
+			</tr></thead>`);
+
+		let arrayprov = [];
+
+		// Time until next sectors will be available
+		for (let i in mapdata) {
+			if (!mapdata.hasOwnProperty(i)) continue;
+
+			let ownsectors = true;
+			if (!GuildFights.showOwnSectors)
+				ownsectors = (own.clan.name !== mapdata[i].owner);
+
+			if (mapdata[i].lockedUntil !== undefined && ownsectors)
+				arrayprov.push(mapdata[i]);  // push all data into array
+		}
+
+		let prov = arrayprov.sort((a, b) => { return a.lockedUntil - b.lockedUntil });
+
+		for (let x in prov) {
+			if (!prov.hasOwnProperty(x)) continue;
+
+			let showCountdowns = true;
+			if (GuildFights.showAdjacentSectors) {
+				if (!prov[x].hasOwnProperty('neighbor')) 
+					showCountdowns = false;
+				else
+					showCountdowns = (prov[x].neighbor.includes(own.participantId) || (prov[x].owner == own.clan.name && GuildFights.showOwnSectors));
+			}
+
+			if (showCountdowns) {
+				let countDownDate = prov[x].lockedUntil,
+					color = GuildFights.SortedColors.find(e => e.id === prov[x].ownerId),
+					battleType = prov[x].isAttackBattleType ? 'BTattack' : 'BTdefence',
+					intervalID = setInterval(() => {
+						GuildFights.UpdateCounter(countDownDate, intervalID, prov[x].id);
+					}, 1000);
+
+				GuildFights.CounterIntervals.push(intervalID);
+
+				
+				// look for connecting province timers
+				let connectionSecured = false;
+				for (const link of ProvinceMap.ProvinceData()[prov[x].id].connections) {
+					if (prov[x].owner == own.clan.name) continue;
+					
+					let ownNeighboringProvinces = mapdata.filter(x => x.id === link && x.ownerId === own.participantId);
+					for (const nProv of ownNeighboringProvinces) {
+						if (nProv.isSpawnSpot) {
+							connectionSecured = true;
+							break;
+						}
+
+						if ((nProv.lockedUntil||0) < prov[x].lockedUntil) continue;
+
+						connectionSecured = true;
+						break;
+					}
+				}
+				
+				
+				let remaining = FH.GameTime.diff(countDownDate);
+				let bgColor = false;
+				if (remaining < 600 * 1000) {
+					if (prov[x].gainAttritionChance === 100)
+						bgColor = 'bg-red';
+					else if (prov[x].gainAttritionChance > 20)
+						bgColor = 'bg-yellow';
+				}
+				let signalClass = prov[x].signal || '';
+
+				nextup.push(`<tr id="timer-${prov[x].id}" class="timer ${connectionSecured ? 'secure' : ''} ${bgColor ? bgColor : ''} ${signalClass}" data-tab="nextup" data-id=${prov[x].id}>
+					<td class="prov-name" data-original-title="${FH.t('Boxes.GuildFights.Owner')}: ${prov[x].owner}">
+					<span class="province-color" ${color['base'] ? `style="background-color:${color['main']};border-color:${color['base']}` : ''}"></span>
+					<span class="battletype ${battleType}"></span>
+					<b>${prov[x].title}</b> 
+					</td>`);
+
+				GuildFights.UpdateCounter(countDownDate, intervalID, prov[x].id);
+
+				if (GuildFights.showGuildColumn) 
+					nextup.push(`<td>${prov[x].owner}</td>`);
+
+				let timeAt = FH.GameTime.moment(countDownDate).add(LiveFightSettings?.showServerTime ? - 60 * (GuildFights.serverOffset ?? 0) : 0 , "seconds");
+				nextup.push(`<td class="time-static" style="user-select:text"><span data-original-title="${FH.t('Boxes.GuildFights.Attrition')}: ${prov[x].gainAttritionChance}%">${timeAt.format('HH:mm:ss')}</span></td>
+							<td id="counter-${prov[x].id}"></td>`);
+
+				let discordButtons = '';
+				if (prov[x].owner !== own.clan.name && GuildFights.discordWebhook.url != '') {
+					if (GuildFights.discordWebhook.template != '') {
+						let tpl = Discord.WebHooks.find(x => x.name == GuildFights.discordWebhook.template);
+						if (tpl)
+							discordButtons += `<button class="btn btn-slim discord custom" data-original-title="${FH.t('Boxes.GuildFights.DiscordSendCustom')}" onclick="Discord.sendGBGSectorCustom(${prov[x]['id']});"></button>`;
+					}
+					discordButtons += `<button class="btn btn-slim discord" data-original-title="${FH.t('Boxes.GuildFights.DiscordSend')}" onclick="Discord.sendGBGSector(${prov[x]['id']});"></button>`;
+				}
+
+				nextup.push(`<td class="text-right">`);
+				if (discordButtons != '')
+					nextup.push(`<div class="btn-group">${discordButtons}</div>`);
+				nextup.push(`</td>`);
+
+				nextup.push(`<td class="text-right" id="alert-${prov[x]['id']}">
+					${GuildFights.GetAlertButton(prov[x].id)}
+					</div></td>`);
+				nextup.push('</tr>');
+			}
+		}
+
+		nextup.push('</table></div>');
+
+		return nextup;
+	},
+
+
+	BuildOwnedTab: function() {
+		let content = [],
+			provinces = GuildFights.MapData.map.provinces,
+			guilds = GuildFights.MapData.battlegroundParticipants,
+			own = guilds.find(x => x.clan.id === FH.Guild.ID),
+			LiveFightSettings = JSON.parse(FH.Storage.getItem('LiveFightSettings'));
+
+		content.push('<div id="gbgowned"><table class="foe-table">');
+		content.push('<thead><tr class="sorter-header">');
+		content.push('<th class="is-text prov-name" data-type="gbg-owned-group" style="user-select:text">' + FH.t('Boxes.GuildFights.Province') + '</th>');
+		content.push('<th class="is-number" data-type="gbg-owned-group">' + FH.t('Boxes.GuildFights.Count') + '</th>');
+		content.push('<th class="is-number" data-type="gbg-owned-group">Slots</th>');
+		content.push('<th class="is-number" data-type="gbg-owned-group">VP</th>');
+		content.push('</tr></thead><tbody class="gbg-owned-group">');
+
+		for (let province of provinces) {
+			if (province.ownerId !== GuildFights.MapData.currentParticipantId) continue;
+			if (province.lockedUntil === undefined) continue;
+
+			let countDownDate = province.lockedUntil,
+				color = GuildFights.SortedColors.find(x => x.id === province.ownerId),
+				intervalID = setInterval(() => {
+					GuildFights.UpdateCounter(countDownDate, intervalID, province.id);
+				}, 1000);
+
+			GuildFights.CounterIntervals.push(intervalID);
+
+			let slotWarning = (province.usedBuildingSlots||0) < province.totalBuildingSlots && province.totalBuildingSlots === 2 ? 'bg-red': ((province.usedBuildingSlots||0) < province.totalBuildingSlots ? 'bg-yellow' : '')
+
+			content.push(`<tr id="time-${province.id}" class="time ${slotWarning}" data-tab="gbgowned" data-id=${province.id}>
+				<td class="prov-name is-text" data-text="${province.title}" title="${FH.t('Boxes.GuildFights.Owner')}: ${province.owner}">
+					<span class="province-color" ${color['main'] ? 'style="background-color:' + color['main'] + '"' : ''}"></span> 
+					<b>${province.title}</b> 
+				</td>`);
+
+			GuildFights.UpdateCounter(countDownDate, intervalID, province.id);
+
+			let timeAt = FH.GameTime.moment(countDownDate).add(LiveFightSettings?.showServerTime ? - 60 * (GuildFights.serverOffset ?? 0) : 0 , "seconds");
+			content.push(`<td class="is-number" data-number="${timeAt.format('HHmmss')}"><span data-original-title="${timeAt.format('HH:mm:ss')}"><span id="counter-${province.id}"></span></span></td>`);
+			content.push(`<td class="is-number" data-number="${province.usedBuildingSlots||0}">${province.usedBuildingSlots||0}/${province.totalBuildingSlots}</td>`);
+			content.push(`<td class="is-number" data-number="${province.victoryPoints}">${province.victoryPoints}</td>`);
+			content.push('</tr>');
+		}
+		
+		content.push('</tbody>');
+		content.push('</table></div>');
+
+		return content;
+	},
+
+
+	/**
+	 * Initatite the Litepicker object
+	 */
+	intiateDatePicker: async () => {
+		if (GuildFights.LogDatePicker) {
+			GuildFights.LogDatePicker.destroy();
+			GuildFights.LogDatePicker = null;
+		}
+		
+		GuildFights.LogDatePicker = new Litepicker({
+			element: document.getElementById('gbgLogDatepicker'),
+			format: 'YYYYMMDD',
+			lang: FH.Main.Language,
+			singleMode: false,
+			splitView: false,
+			numberOfMonths: 1,
+			numberOfColumns: 1,
+			autoRefresh: true,
+			minDate: moment.unix(GuildFights.CurrentGBGRound).subtract(12, "d").toDate(),
+			maxDate: moment.unix(GuildFights.CurrentGBGRound).toDate(),
+			startDate: moment.unix(GuildFights.CurrentGBGRound).subtract(11, "d").toDate(),
+			endDate: FH.Main.getCurrentDateTime(),
+			showWeekNumbers: false,
+			onSelect: async (dateStart, dateEnd) => {
+				GuildFights.curDateFilter = moment(dateStart).format('YYYYMMDD');
+				GuildFights.curDateEndFilter = moment(dateEnd).format('YYYYMMDD');
+
+				$('#gbgLogDatepicker').text(GuildFights.formatRange());
+				GuildFights.curDetailViewFilter = { content: 'filter', gbground: GuildFights.CurrentGBGRound };
+				GuildFights.BuildDetailViewContent(GuildFights.curDetailViewFilter);
+
+			}
+		});
+	},
+
+
+	formatRange: () => {
+		let text = undefined;
+		let dateStart = moment(GuildFights.curDateFilter);
+		let dateEnd = moment(GuildFights.curDateEndFilter);
+
+		if (dateStart.isSame(dateEnd)) {
+			text = `${dateStart.format(FH.t('Date'))}`;
+		}
+		else if (dateStart.year() !== (dateEnd.year())) {
+			text = `${dateStart.format(FH.t('Date'))}` + ' - ' + `${dateEnd.format(FH.t('Date'))}`;
+		}
+		else {
+			text = `${dateStart.format(FH.t('DateShort'))}` + ' - ' + `${dateEnd.format(FH.t('Date'))}`;
+		}
+
+		return text;
+	},
+
+
+	ToggleCopyButton: () => {
+		$('.dcbutton').hide();
+		$('.copybutton').show();
+
+		if (!$('#nextup').is(':visible')) {
+			$('.copybutton').hide();
+			return;
+		}
+
+		if ($('.timer.highlight-row').length > 0) {
+			$('.copybutton').html(FH.t('Boxes.GuildFights.Copy'));
+			$('.copybutton').removeClass('all');
+			$('.dcbutton').show();
+			if (GuildFights.discordWebhook.bulkTemplate == "")
+				$('.dcbutton.custom').hide();
+		} else {
+			$('.copybutton').html(FH.t('Boxes.GuildFights.SelectAll'));
+			$('.copybutton').addClass('all');
+		}
+	},
+
+
+	CopyToClipBoard: (e) => {
+		if (e.target.classList.contains('all')) {
+			$('.timer').addClass('highlight-row');
+			GuildFights.ToggleCopyButton();
+			return;
+		}
+		let copycache = [];
+		$('.timer.highlight-row').each(function () {
+			copycache.push(GuildFights.MapData['map']['provinces'].find((mapItem) => mapItem.id == $(this).data('id')));
+		});
+
+		copycache.sort(function (a, b) { return a.lockedUntil - b.lockedUntil });
+		let copy = '';
+		copycache.forEach((mapElem) => {
+			let battleType = mapElem.isAttackBattleType ? '🔴' : '🔵';
+			let LiveFightSettings = JSON.parse(FH.Storage.getItem('LiveFightSettings'));
+			let showTileColors = (LiveFightSettings && LiveFightSettings.showTileColors !== undefined) ? LiveFightSettings.showTileColors : 1;
+			copy += `${FH.GameTime.moment(mapElem.lockedUntil - 60 * (GuildFights.serverOffset || 0)).format('HH:mm')} ${showTileColors === 1 ? battleType : ''} ${mapElem.title} \n`;
+		});
+
+		if (copy !== '') {
+			if (GuildFights.serverOffset && FH.Storage.getItem('Guildfights.TimeZoneWarningShown') === null) { // show warning only once
+				FH.HTML.ShowToastMsg({
+					head: FH.t('Boxes.GuildFights.TimeZoneWarning.Title'),
+					text: FH.t('Boxes.GuildFights.TimeZoneWarning.Desc'),		
+					type: 'error',
+					hideAfter: 60000
+				});
+				FH.Storage.setItem('Guildfights.TimeZoneWarningShown', 'true');
+			}
+			FH.helper.str.copyToClipboard(copy).then(() => {
+				FH.HTML.ShowToastMsg({
+					head: FH.t('Boxes.GuildFights.CopyToClipBoard.Title'),
+					text: FH.t('Boxes.GuildFights.CopyToClipBoard.Desc'),
+					type: 'success',
+					hideAfter: 5000
+				});
+			});
+		}
+	},
+
+
+
+	PrepareForDiscord: (e) => {
+		GuildFights.discordCache = [];
+		$('.timer.highlight-row').each(function () {
+			GuildFights.discordCache.push(GuildFights.MapData.map.provinces.find((mapItem) => mapItem.id == $(this).data('id')));
+		});
+
+		GuildFights.discordCache.sort(function (a, b) { return a.lockedUntil - b.lockedUntil });
+
+		if (GuildFights.discordCache.length > 0) {
+			
+			if (e.target.classList.contains('custom')) {
+				Discord.sendGBGSectorsCustom();
+				return;
+			}
+			Discord.sendGBGSectors();
+		}
+	},
+
+
+	// The tab builders start one countdown interval per row. Rebuilding a tab
+	// throws the old rows away, but the intervals kept running against detached
+	// DOM (UpdateCounter's .text() on an empty jQuery set is a silent no-op, so
+	// they never hit their own clear path). Each rebuild leaked ~60 timers plus
+	// the moment/province objects their closures held. Tear them down first.
+	ClearCounterIntervals: () => {
+		for (let id of GuildFights.CounterIntervals) clearInterval(id);
+		GuildFights.CounterIntervals = [];
+	},
+
+
+	UpdateCounter: (countDownDate, intervalID, id) => {
+		let idSpan = $(`#counter-${id}`),
+			removeIt = false;
+
+		if (countDownDate) {
+			let diff = FH.GameTime.diff(countDownDate);
+
+			if (diff <= 0) {
+				removeIt = true;
+			}
+			else {
+				idSpan.text(moment.utc(diff).format('HH:mm:ss'));
+			}
+		}
+		else {
+			removeIt = true;
+		}
+
+		if (removeIt) {
+			clearInterval(intervalID);
+			GuildFights.CounterIntervals = GuildFights.CounterIntervals.filter(i => i !== intervalID);
+
+			idSpan.text('');
+			$(`#timer-${id}`).find('.time-static').html(`<strong class="text-success">!!</strong>`); // @ToDo: translate
+
+			// remove timer after 5s
+			setTimeout(() => {
+				$(`#timer-${id}`).fadeToggle(function () {
+					$(this).remove();
+					GuildFights.ToggleCopyButton();
+				});
+			}, 5000);
+		}
+	},
+
+
+	/**
+	 * Determine and assign colours of the individual guilds
+	 */
+	PrepareColors: () => {
+		// ist schon fertig aufbereitet
+		if (GuildFights.SortedColors !== null) {
+			return;
+		}
+
+		let colors = [],
+			gbgGuilds = GuildFights.MapData['battlegroundParticipants'];
+
+		for (let i in gbgGuilds) {
+			if (!gbgGuilds.hasOwnProperty(i)) {
+				break;
+			}
+
+			let c = null;
+
+			if (gbgGuilds[i]['clan']['id'] === FH.Guild.ID) {
+				c = GuildFights.Colors.find(o => (o['id'] === 'own_guild_colour'));
+			} else {
+				c = GuildFights.Colors.find(o => (o['id'] === gbgGuilds[i]['colour']));
+			}
+
+			colors.push({
+				id: gbgGuilds[i]['participantId'],
+				cid: c['id'],
+				base: c['base'],
+				main: c['mainColour'],
+				highlight: c['highlight'],
+				shadow: c['shadow']
+			});
+		}
+
+		GuildFights.SortedColors = colors;
+	},
+
+
+	/**
+	 * Real time update of the map box
+	 */
+	RefreshTable: (data) => {
+		if (data.lockedUntil) {
+			let $province = $(`#province-${data['id']}`),
+				elements = $province.find('.attack').length;
+
+			$(`.attack-${data['id']}`).fadeToggle(function () {
+				$(this).remove();
+			});
+
+			if (elements === 1) {
+				$province.fadeToggle(function () {
+					$(this).remove();
+				});
+			}
+
+			// search the province for owner update
+			ProvinceMap.Provinces.forEach((province, index) => {
+				if (province.id === data['id']) {
+					let colors = ProvinceMap.getSectorColors(data['ownerId']);
+
+					if(colors) {
+						province.owner.id = data['ownerId'];
+						province.owner.colors = colors;
+					}
+				}
+			});
+
+			return;
+		}
+
+		for (let i in data['conquestProgress']) {
+			if (!data['conquestProgress'].hasOwnProperty(i)) {
+				break;
+			}
+
+			if (!data['id']) {
+				data['id'] = 0; // A1 delivers no ID, set to 0
+			}
+
+			let d = data['conquestProgress'][i],
+				max = d['maxProgress'],
+				progess = d['progress'],
+				cell = $(`tr#province-${data['id']}`),
+				pColor = ProvinceMap.getSectorColors(GuildFights.MapData.map?.provinces[data.id]?.ownerId),
+				p = GuildFights.MapData['battlegroundParticipants'].find(o => (o['participantId'] === d['participantId']));
+
+			// <tr> is not present, create it
+			if (cell.length === 0) {
+				let newCell = $('<tr />').attr({
+					id: `province-${data['id']}`,
+					'data-id': data['id']
+				});
+
+				let mD = GuildFights.MapData['map']['provinces'].find(d => d.id === data['id']);
+				let provinceColor = pColor['main'] || 'rgba(0,0,0,0)';
+
+				$('#progress').find('table.foe-table').prepend(
+					newCell.append(
+						$('<td />').append(
+							$('<span />').css({ 'background-color': ((!provinceColor) ? '#555':provinceColor['main'])}).attr({ class: 'province-color' }),
+							$('<b />').text(mD['title']),
+						),
+						(GuildFights.showGuildColumn ? $('<td />').text(p['clan']['name']) : ''),
+						$('<td />').attr({
+							field: `${data['id']}-${data['ownerId']}`,
+							class: 'guild-progress'
+						}),
+						$('<td />').attr({
+							field: `${data['id']}-${data['ownerId']}`,
+							class: 'required-progress'
+						}).text(data['conquestProgress'][0].maxProgress))
+					);
+
+				cell = $(`#province-${data['id']}`);
+			}
+
+			cell.removeClass('pulse');
+
+			if (cell.find('.attacker-' + d['participantId']).length > 0) {
+				let color = GuildFights.SortedColors.find(e => e['id'] === p['participantId']);
+
+				cell.find('.attacker-' + d['participantId']).text(progess);
+				cell.find('.attacker-' + d['participantId']).css({
+					'width': (progess / data['conquestProgress'][0].maxProgress * 100) + '%',
+					'background-color': color['main'],
+					'border-color': color['base']
+				});
+			}
+			else {
+				let color = GuildFights.SortedColors.find(e => e['id'] === p['participantId']);
+
+				cell.find('.guild-progress').append(
+					$('<span />').attr({
+						class: `attacker-${d['participantId']} progress`
+					})
+				);
+			}
+
+			cell.addClass('pulse');
+
+			setTimeout(() => {
+				cell.removeClass('pulse');
+			}, 1200);
+		}
+	},
+
+
+	ShowPlayerBoxSettings: () => {
+		let c = [];
+		let Settings = GuildFights.PlayerBoxSettings;
+		c.push(``)
+		c.push(`<p>${FH.t('Boxes.General.Export')}: <span class="btn-group"><button class="btn" onclick="FH.HTML.ExportTable($('#GuildPlayersTable'),'csv','GBG-PlayerList')" title="${FH.HTML.Tooltip(FH.t('Boxes.General.ExportCSV'))}">CSV</button>`);
+		c.push(`<button class="btn" onclick="FH.HTML.ExportTable($('#GuildPlayersTable'),'json','GBG-PlayerList')" title="${FH.HTML.Tooltip(FH.t('Boxes.General.ExportJSON'))}">JSON</button></span></p>`);
+
+		$('#GuildPlayersSettingsBox').html(c.join(''));
+	},
+
+
+	GetAlerts: async () => {
+		return new Promise(async (resolve, reject) => {
+			// is alert.js included?
+			if (!FH.Alerts) {
+				resolve();
+				return;
+			}
+
+			// fetch all alerts and search the id
+			return FH.Alerts.getAll().then((resp) => {
+				if (resp === undefined || resp?.length === 0) {
+					resolve();
+				}
+
+				let currentTime = FH.Main.getCurrentDateTime();
+
+				GuildFights.Alerts = [];
+
+				resp?.forEach((alert) => {
+					if (alert['data']['category'] === 'gbg') {
+						let alertTime = alert['data']['expires'],
+							name = alert['data']['title'],
+							prov = GuildFights.MapData['map']['provinces'].find(
+								e => e.title === name && alertTime > currentTime
+							);
+
+						if (prov !== undefined) {
+							GuildFights.Alerts.push({ provId: prov['id'], alertId: alert.id });
+						}
+					}
+				});
+				resolve();
+			});
+		});
+	},
+
+
+	SetAlert: (id) => {
+		let prov = GuildFights.MapData.map.provinces.find(e => e.id === id);
+		let alertOffset = parseInt( JSON.parse(FH.Storage.getItem('LiveFightSettings') )?.gbgAlertOffset || 30);
+
+		const data = {
+			title: prov.title,
+        	body: FH.helper.str.Replacer(FH.t('Boxes.GuildFights.SaveAlert'), { provinceName: prov.title }),
+			expires: (prov.lockedUntil - alertOffset) * 1000, // -30s * Microtime
+			repeat: -1,
+			persistent: true,
+			tag: '',
+			category: 'gbg',
+			vibrate: false,
+			actions: null
+		};
+
+		FH.Main.sendExtMessage({
+			type: 'alerts',
+			playerId: FH.Player.ID,
+			action: 'create',
+			data: data,
+		}).then((aId) => {
+			GuildFights.Alerts.push({ provId: id, alertId: aId });
+			GuildFights.RefreshAlertButtons(id);
+			FH.HTML.ShowToastMsg({
+				head: FH.t('Boxes.GuildFights.SaveMessage.Title'),
+				text: FH.helper.str.Replacer(FH.t('Boxes.GuildFights.SaveMessage.Desc'), { provinceName: prov.title }),
+				type: 'success',
+				hideAfter: 5000
+			});
+		});
+	},
+
+
+	DeleteAlert: (provId) => {
+		let prov = GuildFights.MapData['map']['provinces'].find(e => e.id === provId);
+		let alert = GuildFights.Alerts.find((a) => a.provId == provId);
+		FH.Main.sendExtMessage({
+			type: 'alerts',
+			playerId: FH.Player.ID,
+			action: 'delete',
+			id: alert.alertId,
+		}).then(() => {
+			GuildFights.Alerts = GuildFights.Alerts.filter((a) => a.provId != provId);
+			FH.HTML.ShowToastMsg({
+				head: FH.t('Boxes.GuildFights.DeleteMessage.Title'),
+				text: FH.helper.str.Replacer(FH.t('Boxes.GuildFights.DeleteMessage.Desc'), { provinceName: prov.title }),
+				type: 'success',
+				hideAfter: 5000
+			});
+			GuildFights.RefreshAlertButtons(provId);
+		});
+	},
+
+
+	ShowLiveFightSettings: () => {
+		let c = [];
+		let LiveFightSettings = JSON.parse(FH.Storage.getItem('LiveFightSettings'));
+		let showGuildColumn = (LiveFightSettings && LiveFightSettings.showGuildColumn !== undefined) ? LiveFightSettings.showGuildColumn : 0;
+		let showAdjacentSectors = (LiveFightSettings && LiveFightSettings.showAdjacentSectors !== undefined) ? LiveFightSettings.showAdjacentSectors : 1;
+		let showOwnSectors = (LiveFightSettings && LiveFightSettings.showOwnSectors !== undefined) ? LiveFightSettings.showOwnSectors : 0;
+		let showTileColors = (LiveFightSettings && LiveFightSettings.showTileColors !== undefined) ? LiveFightSettings.showTileColors : 1;
+		let showGbgTargets = LiveFightSettings?.showGbgTargets ?? 1;
+		let gbgTargetsPosition = LiveFightSettings?.gbgTargetsPosition || 'top';
+		let showServerTime = LiveFightSettings?.showServerTime ?? 0;
+		let gbgAlertOffset = LiveFightSettings?.gbgAlertOffset ?? 30;
+		let discordWebhook = LiveFightSettings?.discordWebhook ?? '';
+		let discordWebhookTemplate = LiveFightSettings?.discordWebhookTemplate ?? '';
+		let discordWebhookTemplateBulk = LiveFightSettings?.discordWebhookTemplateBulk ?? '';
+		let autoOpen = LiveFightSettings?.autoOpen ?? 0;
+
+		c.push(`<p><input id="gbgautopen" name="gbgautopen" value="1" type="checkbox" ${(autoOpen === 1) ? ' checked="checked"' : ''} /> 
+			<label for="gbgautopen">${FH.t('Boxes.General.AutoOpen')}</label></p>
+			<p><input id="showguildcolumn" name="showguildcolumn" value="1" type="checkbox" ${(showGuildColumn === 1) ? ' checked="checked"' : ''} /> 
+			<label for="showguildcolumn">${FH.t('Boxes.GuildFights.ShowOwner')}</label></p>
+			<p><input id="showAdjacentSectors" name="showAdjacentSectors" value="0" type="checkbox" ${(showAdjacentSectors === 1) ? ' checked="checked"' : ''} /> 
+			<label for="showAdjacentSectors">${FH.t('Boxes.GuildFights.ShowAdjacentSectors')}</label></p>
+			<p><input id="showownsectors" name="showownsectors" value="0" type="checkbox" ${(showOwnSectors === 1) ? ' checked="checked"' : ''} /> 
+			<label for="showownsectors">${FH.t('Boxes.GuildFights.ShowOwnSectors')}</label></p>
+			<p><input id="showtilecolors" name="showtilecolors" value="0" type="checkbox" ${(showTileColors === 1) ? ' checked="checked"' : ''} /> 
+			<label for="showtilecolors">${FH.t('Boxes.GuildFights.ShowTileColors')}</label></p>
+
+		<hr>
+
+		<p><input id="showGbgTargets" name="showGbgTargets" value="1" type="checkbox" ${(showGbgTargets === 1) ? ' checked="checked"' : ''} /> 
+		<label for="showGbgTargets">${FH.t('Boxes.GuildFights.GBGTargetsShow')}</label></p>
+		<p><label for="gbgTargetsPosition">${FH.t('Boxes.GuildFights.GBGTargetsPosition')}</label> 
+		<select id="gbgTargetsPosition" name="gbgTargetsPosition">
+			<option value="bottom" ${gbgTargetsPosition === 'bottom' ? ' selected="selected"' : ''}>${FH.t('Boxes.GuildFights.GBGTargetsPositionBottom')}</option>
+			<option value="top" ${gbgTargetsPosition === 'top' ? ' selected="selected"' : ''}>${FH.t('Boxes.GuildFights.GBGTargetsPositionTop')}</option>
+			<option value="left" ${gbgTargetsPosition === 'left' ? ' selected="selected"' : ''}>${FH.t('Boxes.GuildFights.GBGTargetsPositionLeft')}</option>
+		</select></p>
+
+		<hr>
+
+		<p><input id="showservertime" name="showservertime" value="0" type="checkbox" ${(showServerTime === 1) ? ' checked="checked"' : ''} /> 
+		<label for="showservertime">${FH.t('Boxes.GuildFights.ShowServerTime')}</label></p>
+		<p><label for="serverOffset">${FH.t('Boxes.GuildFights.serverOffset')}</label> 
+		<input id="serverOffset" name="serverOffset" value="${GuildFights.serverOffset??""}" type="text" maxlength="5" size="5"/></p>
+
+		<hr>
+
+		<p><label for="gbgalertoffset">${FH.t('Boxes.GuildFights.AlertOffset')}</label> 
+		<input id="gbgalertoffset" name="gbgalertoffset" value="${gbgAlertOffset}" maxlength="3" size="3" type="text" /> </p>
+		
+		<hr>
+
+		<p><label for="gbgWebhook"><b>${FH.t('Menu.Discord.Title')}</b></label><br />`);
+			if (Discord.WebHooksUrls.length === 0)
+				c.push(`${FH.t('Boxes.GuildFights.DiscordSetup')}: <span class="btn btn-slim" onclick="Discord.BuildBox()">${FH.t('General.Open')}</span>`);
+			else {
+				c.push(`<select id="gbgWebhook" name="gbgWebhook">`);
+				c.push(`<option value="">${FH.t('General.Choose')}</option>`);
+				for(let url of Discord.WebHooksUrls) {
+					c.push(`<option value="${url.url}" ${discordWebhook === url.url ? ' selected="selected"' : ''}>${url.name}</option>`);
+				}
+			c.push(`</select>`);
+			}
+			let templates = Discord.WebHooks.filter(x => x.type == "template");
+			if (Discord.WebHooksUrls.length !== 0 && templates.length != 0) {
+				c.push(`<select id="gbgWebhookTemplate" name="gbgWebhookTemplate">`);
+				c.push(`<option value="">${FH.t('Boxes.Discord.TitleNewTemplate')}</option>`);
+				for(let tpl of templates) {
+					c.push(`<option value="${tpl.name}" ${discordWebhookTemplate === tpl.name ? ' selected="selected"' : ''}>${tpl.name}</option>`);
+				}
+			c.push(`</select>`);}
+			if (Discord.WebHooksUrls.length !== 0 && templates.length != 0) {
+				c.push(`<select id="gbgWebhookTemplateBulk" name="gbgWebhookTemplateBulk">`);
+				c.push(`<option value="">${FH.t('Boxes.GuildFights.DiscordTemplateBulk')}</option>`);
+				for(let tpl of templates) {
+					c.push(`<option value="${tpl.name}" ${discordWebhookTemplateBulk === tpl.name ? ' selected="selected"' : ''}>${tpl.name}</option>`);
+				}
+			c.push(`</select>`);}
+			c.push(`</p>`);
+		c.push(`<p><button onclick="GuildFights.SaveLiveFightSettings()" id="save-livefight-settings" class="btn saveSettings">${FH.t('Boxes.GuildFights.SaveSettings')}</button></p>`);
+
+		
+		$('#LiveGuildFightingSettingsBox').html(c.join(''));
+	},
+
+
+	SaveLiveFightSettings: () => {
+		let value = {};
+
+		value.autoOpen = 0;
+		value.showGuildColumn = 0;
+		value.showAdjacentSectors = 0;
+		value.showOwnSectors = 0;
+		value.showTileColors = 0;
+		value.showGbgTargets = 0;
+		value.gbgTargetsPosition = 'top';
+		value.showServerTime = 0;
+		value.gbgAlertOffset = 30;
+		value.discordWebhook = '';
+		value.discordWebhookTemplate = '';
+		value.discordWebhookTemplateBulk = '';
+
+		if ($("#gbgautopen").is(':checked')) 
+			value.autoOpen = 1;
+
+		if ($("#showguildcolumn").is(':checked')) 
+			value.showGuildColumn = 1;
+
+		if ($("#showAdjacentSectors").is(':checked')) 
+			value.showAdjacentSectors = 1;
+
+		if ($("#showownsectors").is(':checked')) 
+			value.showOwnSectors = 1;
+
+		if ($("#showtilecolors").is(':checked')) 
+			value.showTileColors = 1;
+
+		if ($("#showGbgTargets").is(':checked')) 
+			value.showGbgTargets = 1;
+
+		value.gbgTargetsPosition = $("#gbgTargetsPosition").val();
+
+		if ($("#showservertime").is(':checked')) 
+			value.showServerTime = 1;
+
+		value.gbgAlertOffset = $("#gbgalertoffset").val();
+		value.discordWebhook = $("#gbgWebhook").val();
+		value.discordWebhookTemplate = $("#gbgWebhookTemplate").val();
+		value.discordWebhookTemplateBulk = $("#gbgWebhookTemplateBulk").val();
+				
+		GuildFights.autoOpen = value.autoOpen;
+		GuildFights.showGuildColumn = value.showGuildColumn;
+		GuildFights.showAdjacentSectors = value.showAdjacentSectors;
+		GuildFights.showOwnSectors = value.showOwnSectors;
+		GuildFights.showTileColors = value.showTileColors;
+		GuildFights.showGbgTargets = value.showGbgTargets;
+		GuildFights.gbgTargetsPosition = value.gbgTargetsPosition;
+		GuildFights.showServerTime = value.showServerTime;
+		GuildFights.gbgAlertOffset = value.gbgAlertOffset;
+		GuildFights.discordWebhook.url = value.discordWebhook;
+		GuildFights.discordWebhook.template = value.discordWebhookTemplate;
+		GuildFights.discordWebhook.bulkTemplate = value.discordWebhookTemplateBulk;
+		GuildFights.serverOffset = parseInt($("#serverOffset").val()) ?? null;
+
+		if (GuildFights.serverOffset != null)
+			FH.Storage.setItem('GuildFights.serverOffset', JSON.stringify(GuildFights.serverOffset)) 
+		else
+			FH.Storage.removeItem('GuildFights.serverOffset');
+		FH.Storage.setItem('LiveFightSettings', JSON.stringify(value));
+
+		GuildFights.ShowFocusSignals();
+
+		$(`#LiveGuildFightingSettingsBox`).fadeToggle('fast', function () {
+			$.when($(`#LiveGuildFightingSettingsBox`).remove()).then(
+				GuildFights.ShowGuildBox(true)
+			);
+		});
+	},	
+};
+
+setInterval(GuildFights.UpdateMenuSignalTimer, 60000);
+
+let ProvinceMap = {
+	Map: {},
+	MapCTX: {},
+
+	Size: {
+		width: 1000,
+		height: 1000
+	},
+
+	Provinces: [],
+	StrokeColor: '#111',
+	selectedProvince: null,
+	hoveredProvince: null,
+	hoverAdjacentProvincesIds: [],
+
+	mapDrag: () => {
+		const wrapper = document.getElementById('province-map-wrap');	
+		let pos = { top: 0, left: 0, x: 0, y: 0 };
+		
+		const mouseDownHandler = function(e) {	
+			pos = {
+				left: wrapper.scrollLeft,
+				top: wrapper.scrollTop,
+				x: e.clientX,
+				y: e.clientY,
+			};
+	
+			document.addEventListener('mousemove', mouseMoveHandler);
+			document.addEventListener('mouseup', mouseUpHandler);
+			const canvasPos = ProvinceMap.getCanvasPoint(e);
+			ProvinceMap.selectedProvince = ProvinceMap.findProvinceAt(canvasPos.x, canvasPos.y);
+			if (ProvinceMap.selectedProvince)
+				ProvinceMap.showProvinceDetails();
+		};
+	
+		const mouseMoveHandler = function(e) {
+			const dx = e.clientX - pos.x;
+			const dy = e.clientY - pos.y;
+			wrapper.scrollTop = pos.top - dy;
+			wrapper.scrollLeft = pos.left - dx;
+		};
+	
+		const mouseUpHandler = function() {	
+			document.removeEventListener('mousemove', mouseMoveHandler);
+			document.removeEventListener('mouseup', mouseUpHandler);
+		};
+
+        ProvinceMap.Map.addEventListener('mousedown', function (e) {
+			wrapper.addEventListener('mousedown', mouseDownHandler);
+        }, false);
+	},
+
+	trackHover: () => {
+		ProvinceMap.Map.addEventListener('mousemove', function (e) {
+			const canvasPos = ProvinceMap.getCanvasPoint(e);
+			ProvinceMap.setHoveredProvince(ProvinceMap.findProvinceAt(canvasPos.x, canvasPos.y));
+		});
+
+		ProvinceMap.Map.addEventListener('mouseleave', function () {
+			ProvinceMap.setHoveredProvince(null);
+		});
+	},
+
+	trackClick: () => {
+		ProvinceMap.Map.addEventListener('click', function (e) {
+			const canvasPos = ProvinceMap.getCanvasPoint(e);
+			const province = ProvinceMap.findProvinceAt(canvasPos.x, canvasPos.y);
+			if (!province) return;
+
+			$(`#LiveGuildFightingBody tr[data-tab="nextup"][data-id="${province.id}"]`).toggleClass('highlight-row');
+			GuildFights.ToggleCopyButton();
+		});
+	},
+
+	setHoveredProvince: (province) => {
+		if (province === ProvinceMap.hoveredProvince) return;
+
+		if (ProvinceMap.hoveredProvince) {
+			$(`#LiveGuildFightingBody tr[data-tab="nextup"][data-id="${ProvinceMap.hoveredProvince.id}"], #LiveGuildFightingBody tr[data-tab="gbgowned"][data-id="${ProvinceMap.hoveredProvince.id}"]`)
+				.removeClass('province-hover');
+		}
+
+		ProvinceMap.clearAdjacentProvincesHighlight();
+
+		ProvinceMap.hoveredProvince = province;
+
+		if (province) {
+			$(`#LiveGuildFightingBody tr[data-tab="nextup"][data-id="${province.id}"], #LiveGuildFightingBody tr[data-tab="gbgowned"][data-id="${province.id}"]`)
+				.addClass('province-hover');
+
+			ProvinceMap.highlightAdjacentProvincess(province);
+		}
+	},
+
+	highlightAdjacentProvincess: (province) => {
+		if (province.lockedUntil === undefined || !province.links) return;
+
+		ProvinceMap.hoverAdjacentProvincesIds = province.links.filter((linkId) => {
+			const adjacent = ProvinceMap.Provinces[linkId];
+			return adjacent && adjacent.lockedUntil !== undefined && adjacent.lockedUntil < province.lockedUntil;
+		});
+
+		ProvinceMap.hoverAdjacentProvincesIds.forEach((id) => ProvinceMap.Provinces[id]?.updateMapSector());
+	},
+
+	clearAdjacentProvincesHighlight: () => {
+		if (ProvinceMap.hoverAdjacentProvincesIds.length === 0) return;
+
+		const idsToRedraw = ProvinceMap.hoverAdjacentProvincesIds;
+		ProvinceMap.hoverAdjacentProvincesIds = [];
+		idsToRedraw.forEach((id) => ProvinceMap.Provinces[id]?.updateMapSector());
+	},
+
+	getSectorColors: (ownerID) => {
+		if (ownerID !== undefined)
+			return GuildFights.SortedColors.find(c => (c.id === ownerID))
+		else
+			return {
+				main: '#444',
+				highlight: '#666',
+				shadow: '#333',
+				base: '#444',
+				id: undefined
+			}
+	},
+
+	build: () => {
+		if ($('#ProvinceMap').length === 0) {
+			FH.HTML.Box({
+				id: 'ProvinceMap',
+				title: 'ProvinceMap',
+				auto_close: true,
+				dragdrop: true,
+				minimize: true,
+				resize: true,
+			    active_maps: 'gg',
+				popout: true
+			});
+
+			// add css to the dom
+			FH.HTML.AddCssFile('guildfights');
+		} else {
+			FH.HTML.CloseOpenBox('ProvinceMap')
+		}
+
+		ProvinceMap.prepare();
+	},
+
+	prepare: () => {
+		$('#ProvinceMap').addClass(GuildFights.MapData.map['id']);
+
+		ProvinceMap.Map = document.createElement("canvas");
+		ProvinceMap.MapCTX = ProvinceMap.Map.getContext('2d');
+		ProvinceMap.view = "guildType";
+
+		$(ProvinceMap.Map).attr({
+			id: 'province-map',
+			width: ProvinceMap.Size.width,
+			height: ProvinceMap.Size.height,
+		});
+
+		let wrapper = document.createElement("div");
+		$(wrapper).attr({
+			id: 'province-map-wrap',
+		});
+		$(wrapper).html(ProvinceMap.Map);
+		$('#ProvinceMapBody').html(wrapper).append('<span id="zoomGBGMap" class="btn">'+FH.t('Boxes.General.Zoom')+'</span><div id="provDetails"></div>');
+		
+		ProvinceMap.mapDrag();
+		ProvinceMap.trackHover();
+		ProvinceMap.trackClick();
+
+		$('#zoomGBGMap').click(function (e) {
+			$('#province-map').toggleClass('zoomed');
+		});
+
+		ProvinceMap.MapCTX.strokeStyle = ProvinceMap.StrokeColor;
+		ProvinceMap.MapCTX.lineWidth = 2;
+
+		// put 0,0 in the center on volcano map
+		if (GuildFights.MapData.map['id'] === "volcano_archipelago") {
+			ProvinceMap.MapCTX.translate(ProvinceMap.Size.width/2, ProvinceMap.Size.height/2);
+		}
+
+		// Objects
+		function Province(data) {
+			this.id = data.id || 0;
+			this.name = data.name;
+			this.short = data.short;
+			this.links = data.links;
+			this.flag = data.flag;
+			this.battleType = data.battleType;
+			this.isSpawnSpot = data.isSpawnSpot;
+			this.owner = {
+				id: data.ownerID,
+				name: data.ownerName,
+				flagImg: data.flagImg,
+				colors: ProvinceMap.getSectorColors(data.ownerID),
+			};
+			this.lockedUntil = data.lockedUntil;
+			// Sectors which are open but with no progress are missing the "conquestProgress" key in the response
+			this.conquestProgress = data.conquestProgress || [];
+			this.circlePosition = data.circlePosition;
+			this.totalBuildingSlots = data.totalBuildingSlots;
+			this._shapeCache = {};
+			this.isSelected = false;
+
+			return this;
+		}
+
+		Province.prototype.updateMapSector = function () {
+			this.drawMapSector(GuildFights.MapData.map['id']); 
+		}
+
+		Province.prototype.drawMapSector = function (mapType = 'waterfall_archipelago') {
+			ProvinceMap.MapCTX.font = 'bold 30px Arial';
+			ProvinceMap.MapCTX.textAlign = "center";
+			ProvinceMap.MapCTX.textBaseline = "top";
+			ProvinceMap.MapCTX.fillStyle = this.owner.colors.highlight;
+			
+			let sector = this;
+			let noRealignSectors = [];
+
+			// waterfall map
+			let hexwidthFactor = 7.5;
+			let hexheightFactor = 10;
+			let mapStuff = {
+				hexwidth: ProvinceMap.Size.width / hexwidthFactor,
+				hexheight: ProvinceMap.Size.height / hexheightFactor,
+				x: sector.flag.x * (ProvinceMap.Size.width / (hexwidthFactor*2 + hexwidthFactor*2/3)) + ProvinceMap.Size.width / (hexwidthFactor*2 + hexwidthFactor*2/3),
+				y: sector.flag.y * (ProvinceMap.Size.height / (hexheightFactor*2)) + (ProvinceMap.Size.height / (hexheightFactor*2))
+			};
+
+			if (mapType === 'volcano_archipelago') {
+				let xy = { x: 1, y: -1};
+				mapStuff.x = xy.x*(sector.circlePosition.radius-sector.circlePosition.initRadius/2)*Math.sin(sector.circlePosition.angle+sector.circlePosition.angleFragment/2);
+				mapStuff.y = xy.y*(sector.circlePosition.radius-sector.circlePosition.initRadius/2)*Math.cos(sector.circlePosition.angle+sector.circlePosition.angleFragment/2);
+				noRealignSectors = [1,2,29,31,30,32,33,34,35,37,38,39,41,42,43,45,46,47,49,50,51,53,54,55,57,58,59];
+
+				// realign some sectors on volcano map to have more space
+				if (!noRealignSectors.includes(sector.id) && sector.owner.flagImg == undefined) 
+					mapStuff.y = mapStuff.y - 10;
+			}
+
+			if (sector.owner.flagImg && sector.isSpawnSpot) 
+				sector.drawStartSector(mapStuff, mapType);
+			
+			else {
+				ProvinceMap.MapCTX.fillStyle = sector.owner.colors.highlight;
+				if (this.isSelected || ProvinceMap.hoverAdjacentProvincesIds.includes(this.id)) ProvinceMap.MapCTX.fillStyle = this.owner.colors.base;
+
+				if (ProvinceMap.view == "battleType" && sector.battleType == "red" && sector.owner.colors.cid !== "own_guild_colour")
+					ProvinceMap.MapCTX.fillStyle = "#cf401e";
+				else if (ProvinceMap.view == "battleType" && sector.battleType == "blue" && sector.owner.colors.cid !== "own_guild_colour")
+					ProvinceMap.MapCTX.fillStyle = "#4a98dd";
+
+				const path = sector.drawSectorShape(mapType);
+				ProvinceMap.MapCTX.fill(path);
+				ProvinceMap.MapCTX.stroke(path);
+
+				mapStuff.y = mapStuff.y - 20;
+				
+				if (sector.lockedUntil === undefined && sector.conquestProgress.length === 0) 
+					sector.drawTitleAndSlots(mapType, true, mapStuff.x, mapStuff.y);
+				else {
+					if (mapType === 'waterfall_archipelago') 
+						mapStuff.y = mapStuff.y - 10;
+					sector.drawTitleAndSlots(mapType, false, mapStuff.x, mapStuff.y);
+				}
+
+				mapStuff.y = mapStuff.y+23;
+				sector.drawUnlockTime(mapStuff);
+
+				mapStuff.y = mapStuff.y+10;
+				if (sector.lockedUntil !== undefined) 
+					mapStuff.y = mapStuff.y+20;
+
+				sector.drawProgress(mapStuff);
+			}
+		}
+
+		Province.prototype.drawUnlockTime = function(mapStuff) {
+			ProvinceMap.MapCTX.font = 'bold 20px Courier New';
+			ProvinceMap.MapCTX.fillStyle = '#000';
+			if (ProvinceMap.hoverAdjacentProvincesIds.includes(this.id) || this.isSelected) ProvinceMap.MapCTX.fillStyle = '#fff';
+
+			let provinceUnlockTime = this.lockedUntil && this.lockedUntil > FH.GameTime.get()? FH.GameTime.moment(this.lockedUntil).format('HH:mm') : '';
+			ProvinceMap.MapCTX.fillText(provinceUnlockTime,mapStuff.x,mapStuff.y+5);
+		}
+
+		Province.prototype.drawTitleAndSlots = function(mapType, drawCentered = true, x, y) {
+			let titleY = y;
+			let slotsY = y - 20;
+			if (drawCentered) {
+				titleY = y + 10;
+				slotsY = y - 10;
+			}
+
+			// do not draw dots for own sectors
+			if (this.owner.colors.cid != "own_guild_colour") {
+				ProvinceMap.MapCTX.strokeStyle = '#000';
+				if (ProvinceMap.hoverAdjacentProvincesIds.includes(this.id)) ProvinceMap.MapCTX.strokeStyle = '#fff';
+
+				ProvinceMap.MapCTX.beginPath();
+				ProvinceMap.MapCTX.arc(x-36, titleY+12, 5, 0, 2*Math.PI);
+
+				ProvinceMap.MapCTX.fillStyle = '#f00';
+				if (this.battleType == 'blue')
+					ProvinceMap.MapCTX.fillStyle = '#00f';
+	
+				if (ProvinceMap.view == "battleType")
+					ProvinceMap.MapCTX.fillStyle = this.owner.colors.highlight;
+				ProvinceMap.MapCTX.stroke();
+				ProvinceMap.MapCTX.fill();
+			}
+
+			ProvinceMap.MapCTX.strokeStyle = '#fff5';
+			if (this.isSelected || ProvinceMap.hoverAdjacentProvincesIds.includes(this.id)) ProvinceMap.MapCTX.strokeStyle = '#000';
+
+			ProvinceMap.MapCTX.font = 'bold 28px Arial';
+			ProvinceMap.MapCTX.strokeText(this.short, x, titleY);
+
+			ProvinceMap.MapCTX.fillStyle = '#000';
+			if (ProvinceMap.hoverAdjacentProvincesIds.includes(this.id)) ProvinceMap.MapCTX.fillStyle = '#fff';
+			if (this.isSelected) ProvinceMap.MapCTX.fillStyle = this.owner.colors.highlight;
+
+			ProvinceMap.MapCTX.fillText(this.short, x, titleY);
+			
+			if (this.totalBuildingSlots != undefined) {
+				let slots = '';
+				if (this.totalBuildingSlots == 1)
+					slots = '·';
+				else if (this.totalBuildingSlots == 2)
+					slots = '··';
+				else if (this.totalBuildingSlots == 3)
+					slots = '···';
+	
+				ProvinceMap.MapCTX.strokeText(slots, x, slotsY);
+				ProvinceMap.MapCTX.fillText(slots, x, slotsY);
+			}
+		}
+
+		Province.prototype.drawProgress = function(mapStuff) {
+			ProvinceMap.MapCTX.strokeStyle = ProvinceMap.StrokeColor;
+			if (this.conquestProgress !== undefined && this.conquestProgress.length > 0)
+				this.conquestProgress.forEach(function(prog, index) {
+					let colors = [...GuildFights.SortedColors]
+					let progDiff = (prog.progress / prog.maxProgress);
+					let color = colors.find(c => (c.id === prog.participantId));
+					let barWidth = 50;
+					let x = mapStuff.x-27;
+
+					ProvinceMap.MapCTX.fillStyle = '#111a';
+					ProvinceMap.MapCTX.fillRect(x, mapStuff.y + 8*index + 1, 3 + barWidth, 4);
+					ProvinceMap.MapCTX.fillStyle = color.highlight;
+					ProvinceMap.MapCTX.strokeRect(x, mapStuff.y + 8*index, 3 + barWidth*progDiff, 6);
+					ProvinceMap.MapCTX.fillRect(x, mapStuff.y + 8*index, 3 + barWidth*progDiff, 6);
+				});
+		}
+
+		Province.prototype.drawStartSector = function(mapStuff, mapType) {
+			let flag_image = new Image();
+			flag_image.src = srcLinks.get(`/shared/clanflags/${this.owner.flagImg}.jpg`, true);
+			let sector = this;
+			let flagX = mapStuff.x-25;
+			let flagY = mapStuff.y-25;
+			let flagSize = 50;
+
+			flag_image.onload = function () {
+				ProvinceMap.MapCTX.fillStyle = sector.owner.colors.highlight;
+				const path = sector.drawSectorShape(mapType);
+				ProvinceMap.MapCTX.fill(path);
+				ProvinceMap.MapCTX.stroke(path);
+				ProvinceMap.MapCTX.drawImage(this, flagX, flagY, flagSize, flagSize);
+			}
+		}
+
+		Province.prototype.drawSectorShape = function (mapType = 'waterfall_archipelago') {
+			if (this._shapeCache[mapType]) {
+				return this._shapeCache[mapType];
+			}
+			const path = new Path2D();
+
+			if (mapType === 'volcano_archipelago') {
+				let xy = { x: 1, y: -1 };
+				let r = this.circlePosition.radius;
+				let ir = this.circlePosition.initRadius;
+				let a = this.circlePosition.angle;
+				let af = this.circlePosition.angleFragment;
+
+				path.moveTo(xy.x*(r-ir) * Math.sin(a), xy.y*(r-ir) * Math.cos(a));
+				path.lineTo(xy.x*r * Math.sin(a), xy.y*r * Math.cos(a));
+				path.lineTo(xy.x*r * Math.sin(a+af/2), xy.y*r * Math.cos(a+af/2));
+				path.lineTo(xy.x*r * Math.sin(a+af), xy.y*r * Math.cos(a+af));
+				path.lineTo(xy.x*(r-ir) * Math.sin(a+af), xy.y*(r-ir) * Math.cos(a+af));
+				path.closePath();
+			}
+			else {
+				// WATERFALL / HEX MAP
+				let hexwidthFactor = 7.5;
+				let hexheightFactor = 10;
+
+				let w = ProvinceMap.Size.width / hexwidthFactor;
+				let h = ProvinceMap.Size.height / hexheightFactor;
+
+				let x =
+					this.flag.x * (ProvinceMap.Size.width / (hexwidthFactor*2 + hexwidthFactor*2/3)) +
+					ProvinceMap.Size.width / (hexwidthFactor*2 + hexwidthFactor*2/3);
+
+				let y =
+					this.flag.y * (ProvinceMap.Size.height / (hexheightFactor*2)) +
+					(ProvinceMap.Size.height / (hexheightFactor*2));
+
+				let p = w / 4;
+				let tb = w / 2;
+
+				path.moveTo(x - p, y - h/2);
+				path.lineTo(x + p, y - h/2);
+				path.lineTo(x + tb, y);
+				path.lineTo(x + p, y + h/2);
+				path.lineTo(x - p, y + h/2);
+				path.lineTo(x - tb, y);
+				path.closePath();
+			}
+
+			this._shapeCache[mapType] = path;
+			return path;
+		}
+
+		let provinces = [];
+
+		function init() {
+			// round map
+			let angle = Math.PI/2; // 90°
+			let rotator = 0;
+			let radius = ProvinceMap.Size.width/8;
+			let initRadius = radius;
+
+			ProvinceMap.ProvinceData().forEach(function (i) {
+				const pD = ProvinceMap.ProvinceData()[i.id];
+
+				let data = {
+					id: i.id,
+					name: pD.name,
+					short: pD.short,
+					links: pD.connections,
+					flag: pD.flag
+				};
+
+				let prov = GuildFights.MapData['map']['provinces'][i.id];
+				data.battleType = prov.isAttackBattleType ? 'red' : 'blue';
+
+				if (prov['ownerId']) {
+					data.ownerID = prov['ownerId'];
+					data.ownerName = prov.owner;
+					data.isSpawnSpot = false;
+					if (prov.isSpawnSpot) {
+						let clan = GuildFights.MapData['battlegroundParticipants'].find(c => c['participantId'] === prov['ownerId']);
+						data['flagImg'] = clan['clan']['flag'].toLowerCase();
+						data.isSpawnSpot = true;
+					}
+				}
+				else if (prov.owner) 
+					data.ownerID = prov.owner.id;
+
+				if (prov.lockedUntil) 
+					data.lockedUntil = prov.lockedUntil;
+
+				if (prov.totalBuildingSlots) 
+					data.totalBuildingSlots = prov.totalBuildingSlots;
+
+				if (prov.conquestProgress.length > 0) 
+					data.conquestProgress = prov.conquestProgress;
+
+				// round map
+				if (rotator >= Math.PI*2) {
+					rotator = 0;
+					angle = angle/2;
+					radius = initRadius+radius;
+				}
+				data.circlePosition = {
+					radius: radius,
+					initRadius: initRadius,
+					angle: rotator,
+					angleFragment: angle
+				};
+				rotator += angle;
+
+				provinces.push(new Province(data));
+			});
+
+			ProvinceMap.Provinces = provinces;
+		}
+
+		init();
+
+		ProvinceMap.BuildMap();
+	},
+
+	getCanvasPoint: (e) => {
+		const rect = ProvinceMap.Map.getBoundingClientRect();
+
+		const scaleX = ProvinceMap.Map.width / rect.width;
+		const scaleY = ProvinceMap.Map.height / rect.height;
+
+		let x = (e.clientX - rect.left) * scaleX;
+		let y = (e.clientY - rect.top) * scaleY;
+
+		return { x, y };
+	},
+
+	findProvinceAt: (x, y) => {
+		const mapType = GuildFights.MapData.map['id'];
+
+		for (let i = ProvinceMap.Provinces.length - 1; i >= 0; i--) {
+			const p = ProvinceMap.Provinces[i];
+			const path = p.drawSectorShape(mapType); // cached Path2D
+			if (ProvinceMap.MapCTX.isPointInPath(path, x, y)) {
+				return p;
+			}
+		}
+		return null;
+	},
+
+	showProvinceDetails: () => {
+		let additionalData = GuildFights.MapData.map.provinces.find(x => x.id === ProvinceMap.selectedProvince.id);
+
+		let elem = document.querySelector("#provDetails");
+		elem.style.borderColor = ProvinceMap.selectedProvince.owner.colors.base;
+		elem.innerHTML = `<h2>${ProvinceMap.selectedProvince.short}</h2>`;
+		elem.innerHTML+= `<p>${ProvinceMap.selectedProvince.owner.name}</p>`;
+		elem.innerHTML+= `<p>${additionalData.victoryPoints}</p>`;
+	},
+
+	/**
+	 * @param socketData
+	 */
+	RefreshSector: (socketData = []) => {
+		let updatedProvince = ProvinceMap.Provinces.find(p => p.id === 0); // first sector does not have an ID, make it the default one
+
+		if (socketData['id'] !== undefined) 
+			 updatedProvince = ProvinceMap.Provinces.find(p => p.id === socketData['id']);
+		
+		if (socketData.conquestProgress)
+			updatedProvince.conquestProgress = socketData.conquestProgress;
+
+		if (socketData.lockedUntil)
+			updatedProvince.lockedUntil = socketData.lockedUntil;
+
+		if (socketData.ownerId !== updatedProvince.owner.id) {
+			updatedProvince.owner.id = socketData.ownerId;
+			updatedProvince.owner.colors = ProvinceMap.getSectorColors(socketData.ownerId);
+		}
+
+		updatedProvince.updateMapSector();
+	},
+
+
+	/**
+	 * Build the Canvas
+	 */
+	BuildMap: () => {
+		ProvinceMap.MapCTX.clearRect(0, 0, ProvinceMap.Size.width, ProvinceMap.Size.height);
+		const provinces = ProvinceMap.Provinces;
+
+		provinces.forEach(province => {
+			province.updateMapSector();
+		});
+	},
+
+
+	hexToRgb: (hex, alpha) => {
+		hex = hex.trim();
+		hex = hex[0] === '#' ? hex.substr(1) : hex;
+
+		let bigint = parseInt(hex, 16), h = [];
+
+		if (hex.length === 3) {
+			h.push((bigint >> 4) & 255);
+			h.push((bigint >> 2) & 255);
+
+		} else {
+			h.push((bigint >> 16) & 255);
+			h.push((bigint >> 8) & 255);
+		}
+
+		h.push(bigint & 255);
+
+		if (alpha) {
+			h.push(alpha);
+			return 'rgba(' + h.join(',') + ')';
+
+		} else {
+			return 'rgb(' + h.join(',') + ')';
+		}
+	},
+
+
+	ProvinceData: () => {
+		return ProvinceMap.SectorMapping[GuildFights.MapData.map['id']];
+	},
+
+	SectorMapping : 
+	{
+		"volcano_archipelago":
+		[
+			{"id":0 , "name":"A1: Mati Tudokk"   , "connections":[1,3,4,5]       , "short":"A1M", "flag": {"x":1249, "y": 816} },
+			{"id":1 , "name":"B1: Ofrus Remyr"   , "connections":[0,2,6,7]       , "short":"B1O", "flag": {"x":1327, "y": 996} },
+			{"id":2 , "name":"C1: Niali Diath"   , "connections":[1,3,8,9]       , "short":"C1N", "flag": {"x":1064, "y":1011} },
+			{"id":3 , "name":"D1: Brurat Andgiry", "connections":[0,2,10,11]     , "short":"D1B", "flag": {"x":1064, "y": 838} },
+			{"id":4 , "name":"A2: Sladisk Icro"  , "connections":[0,5,11,12,13]  , "short":"A2S", "flag": {"x":1269, "y": 629} },
+			{"id":5 , "name":"A2: Tevomospa"     , "connections":[0,4,6,14,15]   , "short":"A2T", "flag": {"x":1482, "y": 752} },
+			{"id":6 , "name":"B2: Subeblic"      , "connections":[1,5,7,16,17]   , "short":"B2S", "flag": {"x":1541, "y": 984} },
+			{"id":7 , "name":"B2: Taspac"        , "connections":[1,6,8,18,19]   , "short":"B2T", "flag": {"x":1375, "y":1197} },
+			{"id":8 , "name":"C2: Shadsterning"  , "connections":[2,7,9,20,21]   , "short":"C2S", "flag": {"x":1052, "y":1217} },
+			{"id":9 , "name":"C2: Tayencoria"    , "connections":[2,8,10,22,23]  , "short":"C2T", "flag": {"x": 878, "y":1063} },
+			{"id":10, "name":"D2: Slandmonii"    , "connections":[3,9,11,24,25]  , "short":"D2S", "flag": {"x": 791, "y": 794} },
+			{"id":11, "name":"D2: Tachmazer"     , "connections":[3,4,10,26,27]  , "short":"D2T", "flag": {"x": 974, "y": 658} },
+			{"id":12, "name":"A3: Vobolize"      , "connections":[4,13,27,28,29] , "short":"A3V", "flag": {"x":1218, "y": 479} },
+			{"id":13, "name":"A3: Xemga"         , "connections":[4,12,14,30,31] , "short":"A3X", "flag": {"x":1407, "y": 523} },
+			{"id":14, "name":"A3: Yelili"        , "connections":[5,13,15,32,33] , "short":"A3Y", "flag": {"x":1592, "y": 574} },
+			{"id":15, "name":"A3: Zamva"         , "connections":[5,14,16,34,35] , "short":"A3Z", "flag": {"x":1693, "y": 710} },
+			{"id":16, "name":"B3: Vishrain"      , "connections":[6,15,17,36,37] , "short":"B3V", "flag": {"x":1721, "y": 889} },
+			{"id":17, "name":"B3: Xidorpupo"     , "connections":[6,16,18,38,39] , "short":"B3X", "flag": {"x":1800, "y":1241} },
+			{"id":18, "name":"B3: Yepadlic"      , "connections":[7,17,19,40,41] , "short":"B3Y", "flag": {"x":1710, "y":1364} },
+			{"id":19, "name":"B3: Zilsier"       , "connections":[7,18,20,42,43] , "short":"B3Z", "flag": {"x":1528, "y":1401} },
+			{"id":20, "name":"C3: Vilipne"       , "connections":[8,19,21,44,45] , "short":"C3V", "flag": {"x":1132, "y":1382} },
+			{"id":21, "name":"C3: Xistan"        , "connections":[8,20,22,46,47] , "short":"C3X", "flag": {"x": 851, "y":1343} },
+			{"id":22, "name":"C3: Yeraim"        , "connections":[9,21,23,48,49] , "short":"C3Y", "flag": {"x": 656, "y":1220} },
+			{"id":23, "name":"C3: Zeaslo"        , "connections":[9,22,24,50,51] , "short":"C3Z", "flag": {"x": 569, "y":1050} },
+			{"id":24, "name":"D3: Verdebu"       , "connections":[10,23,25,52,53], "short":"D3V", "flag": {"x": 592, "y": 824} },
+			{"id":25, "name":"D3: Xiwait"        , "connections":[10,24,26,54,55], "short":"D3X", "flag": {"x": 628, "y": 636} },
+			{"id":26, "name":"D3: Yerat"         , "connections":[11,25,27,56,57], "short":"D3Y", "flag": {"x": 788, "y": 520} },
+			{"id":27, "name":"D3: Zilgypt"       , "connections":[11,12,26,58,59], "short":"D3Z", "flag": {"x":1025, "y": 484} },
+			{"id":28, "name":"A4: Aithmirash"    , "connections":[12,29,59]      , "short":"A4A", "flag": {"x":1176, "y": 310} },
+			{"id":29, "name":"A4: Bangma Mynia"  , "connections":[12,28,30]      , "short":"A4B", "flag": {"x":1337, "y": 316} },
+			{"id":30, "name":"A4: Cuatishca"     , "connections":[13,29,31]      , "short":"A4C", "flag": {"x":1473, "y": 354} },
+			{"id":31, "name":"A4: Dilandmoor"    , "connections":[13,30,32]      , "short":"A4D", "flag": {"x":1591, "y": 391} },
+			{"id":32, "name":"A4: Eda Monwe"     , "connections":[14,31,33]      , "short":"A4E", "flag": {"x":1723, "y": 398} },
+			{"id":33, "name":"A4: Frimoandbada"  , "connections":[14,32,34]      , "short":"A4F", "flag": {"x":1839, "y": 477} },
+			{"id":34, "name":"A4: Gosolastan"    , "connections":[15,33,35]      , "short":"A4G", "flag": {"x":1962, "y": 590} },
+			{"id":35, "name":"A4: Hasaint"       , "connections":[15,34,36]      , "short":"A4H", "flag": {"x":2047, "y": 688} },
+			{"id":36, "name":"B4: Aguime"        , "connections":[16,35,37]      , "short":"B4A", "flag": {"x":1970, "y": 842} },
+			{"id":37, "name":"B4: Bliclatan"     , "connections":[16,36,38]      , "short":"B4B", "flag": {"x":1900, "y":1000} },
+			{"id":38, "name":"B4: Capepesk"      , "connections":[17,37,39]      , "short":"B4C", "flag": {"x":2088, "y":1176} },
+			{"id":39, "name":"B4: Dalomstates"   , "connections":[17,38,40]      , "short":"B4D", "flag": {"x":2138, "y":1361} },
+			{"id":40, "name":"B4: Engthio"       , "connections":[18,39,41]      , "short":"B4E", "flag": {"x":2113, "y":1504} },
+			{"id":41, "name":"B4: Fradistaro"    , "connections":[18,40,42]      , "short":"B4F", "flag": {"x":1951, "y":1590} },
+			{"id":42, "name":"B4: Goima"         , "connections":[19,41,43]      , "short":"B4G", "flag": {"x":1735, "y":1605} },
+			{"id":43, "name":"B4: Hranreka"      , "connections":[19,42,44]      , "short":"B4H", "flag": {"x":1416, "y":1454} },
+			{"id":44, "name":"C4: Andgalbou"     , "connections":[20,43,45]      , "short":"C4A", "flag": {"x":1240, "y":1521} },
+			{"id":45, "name":"C4: Bangne Casau"  , "connections":[20,44,46]      , "short":"C4B", "flag": {"x":1015, "y":1601} },
+			{"id":46, "name":"C4: Cagalpo"       , "connections":[21,45,47]      , "short":"C4C", "flag": {"x": 808, "y":1586} },
+			{"id":47, "name":"C4: Denwana"       , "connections":[21,46,48]      , "short":"C4D", "flag": {"x": 686, "y":1532} },
+			{"id":48, "name":"C4: Eastkiabumi"   , "connections":[22,47,49]      , "short":"C4E", "flag": {"x": 455, "y":1410} },
+			{"id":49, "name":"C4: Francedian"    , "connections":[22,48,50]      , "short":"C4F", "flag": {"x": 304, "y":1318} },
+			{"id":50, "name":"C4: Guayla"        , "connections":[23,49,51]      , "short":"C4G", "flag": {"x": 257, "y":1182} },
+			{"id":51, "name":"C4: Hoguay"        , "connections":[23,50,52]      , "short":"C4H", "flag": {"x": 267, "y":1011} },
+			{"id":52, "name":"D4: Arasruhana"    , "connections":[24,51,53]      , "short":"D4A", "flag": {"x": 429, "y": 851} },
+			{"id":53, "name":"D4: Basainti"      , "connections":[24,52,54]      , "short":"D4B", "flag": {"x": 300, "y": 718} },
+			{"id":54, "name":"D4: Camehermenle"  , "connections":[25,53,55]      , "short":"D4C", "flag": {"x": 415, "y": 600} },
+			{"id":55, "name":"D4: Dabiala"       , "connections":[25,54,56]      , "short":"D4D", "flag": {"x": 398, "y": 465} },
+			{"id":56, "name":"D4: Enggreboka"    , "connections":[26,55,57]      , "short":"D4E", "flag": {"x": 507, "y": 361} },
+			{"id":57, "name":"D4: Finnited"      , "connections":[26,56,58]      , "short":"D4F", "flag": {"x": 723, "y": 311} },
+			{"id":58, "name":"D4: Guayre Bhugera", "connections":[27,57,59]      , "short":"D4G", "flag": {"x": 878, "y": 252} },
+			{"id":59, "name":"D4: Honbo"         , "connections":[27,28,58]      , "short":"D4H", "flag": {"x":1042, "y": 302} }
+		],
+		"waterfall_archipelago":
+		[
+			{"id":0 , "name":"X1X: Elleorus"    , "connections":[1,2,3,4,5,6]      , "short":"X1X", "flag": {"x": 9, "y": 9} },
+			{"id":1 , "name":"A2A: Flunnipia"   , "connections":[0,2,6,7,8,18]     , "short":"A2A", "flag": {"x": 9, "y": 7} },
+			{"id":2 , "name":"B2A: Achinata"    , "connections":[0,1,3,8,9,10]     , "short":"B2A", "flag": {"x":11, "y": 8} },
+			{"id":3 , "name":"C2A: Enudran"     , "connections":[0,2,4,10,11,12]   , "short":"C2A", "flag": {"x":11, "y":10} },
+			{"id":4 , "name":"D2A: Zebbeasos"   , "connections":[0,3,5,12,13,14]   , "short":"D2A", "flag": {"x": 9, "y":11} },
+			{"id":5 , "name":"E2A: Appatinaka"  , "connections":[0,4,6,14,15,16]   , "short":"E2A", "flag": {"x": 7, "y":10} },
+			{"id":6 , "name":"F2A: Kracciarhia" , "connections":[0,1,5,16,17,18]   , "short":"F2A", "flag": {"x": 7, "y": 8} },
+			{"id":7 , "name":"A3A: Micianary"   , "connections":[1,8,18,19,20,36]  , "short":"A3A", "flag": {"x": 9, "y": 5} },
+			{"id":8 , "name":"A3B: Sheaggasia"  , "connections":[1,2,7,9,20,21]    , "short":"A3B", "flag": {"x":11, "y": 6} },
+			{"id":9 , "name":"B3A: Birrathan"   , "connections":[2,8,10,21,22,23]  , "short":"B3A", "flag": {"x":13, "y": 7} },
+			{"id":10, "name":"B3B: Phiodeanet"  , "connections":[2,3,9,11,23,24]   , "short":"B3B", "flag": {"x":13, "y": 9} },
+			{"id":11, "name":"C3A: Ioppiorion"  , "connections":[3,10,12,24,25,26] , "short":"C3A", "flag": {"x":13, "y":11} },
+			{"id":12, "name":"C3B: Acyalyn"     , "connections":[3,4,11,13,26,27]  , "short":"C3B", "flag": {"x":11, "y":12} },
+			{"id":13, "name":"D3A: Giobbolas"   , "connections":[4,12,14,27,28,29] , "short":"D3A", "flag": {"x": 9, "y":13} },
+			{"id":14, "name":"D3B: Briocealyn"  , "connections":[4,5,13,15,29,30]  , "short":"D3B", "flag": {"x": 7, "y":12} },
+			{"id":15, "name":"E3A: Joviolmond"  , "connections":[5,14,16,30,31,32] , "short":"E3A", "flag": {"x": 5, "y":11} },
+			{"id":16, "name":"E3B: Ciobiathis"  , "connections":[5,6,15,17,32,33]  , "short":"E3B", "flag": {"x": 5, "y": 9} },
+			{"id":17, "name":"F3A: Preammirune" , "connections":[6,16,18,33,34,35] , "short":"F3A", "flag": {"x": 5, "y": 7} },
+			{"id":18, "name":"F3B: Exoryme"     , "connections":[1,6,7,17,35,36]   , "short":"F3B", "flag": {"x": 7, "y": 6} },
+			{"id":19, "name":"A4A: Phiossiania" , "connections":[7,20,36,37,38,60] , "short":"A4A", "flag": {"x": 9, "y": 3} },
+			{"id":20, "name":"A4B: Klitimelan"  , "connections":[7,8,19,21,38,39]  , "short":"A4B", "flag": {"x":11, "y": 4} },
+			{"id":21, "name":"A4C: Ioclequey"   , "connections":[8,9,20,22,39,40]  , "short":"A4C", "flag": {"x":13, "y": 5} },
+			{"id":22, "name":"B4A: Lastaruz"    , "connections":[9,21,23,40,41,42] , "short":"B4A", "flag": {"x":15, "y": 6} },
+			{"id":23, "name":"B4B: Ecceacyre"   , "connections":[9,10,22,24,42,43] , "short":"B4B", "flag": {"x":15, "y": 8} },
+			{"id":24, "name":"B4C: Yastalyn"    , "connections":[10,11,23,25,43,44], "short":"B4C", "flag": {"x":15, "y":10} },
+			{"id":25, "name":"C4A: Chobbiabis"  , "connections":[11,24,26,44,45,46], "short":"C4A", "flag": {"x":15, "y":12} },
+			{"id":26, "name":"C4B: Mioccijan"   , "connections":[11,12,25,27,46,47], "short":"C4B", "flag": {"x":13, "y":13} },
+			{"id":27, "name":"C4C: Cheabenium"  , "connections":[12,13,26,28,47,48], "short":"C4C", "flag": {"x":11, "y":14} },
+			{"id":28, "name":"D4A: Diodiriel"   , "connections":[13,27,29,48,49,50], "short":"D4A", "flag": {"x": 9, "y":15} },
+			{"id":29, "name":"D4B: Driqela"     , "connections":[13,14,28,30,50,51], "short":"D4B", "flag": {"x": 7, "y":14} },
+			{"id":30, "name":"D4C: Gakiaran"    , "connections":[14,15,29,31,51,52], "short":"D4C", "flag": {"x": 5, "y":13} },
+			{"id":31, "name":"E4A: Phulotora"   , "connections":[15,30,32,52,53,54], "short":"E4A", "flag": {"x": 3, "y":12} },
+			{"id":32, "name":"E4B: Iccothaer"   , "connections":[15,16,31,33,54,55], "short":"E4B", "flag": {"x": 3, "y":10} },
+			{"id":33, "name":"E4C: Ohephere"    , "connections":[16,17,32,34,55,56], "short":"E4C", "flag": {"x": 3, "y": 8} },
+			{"id":34, "name":"F4A: Xioceomos"   , "connections":[17,33,35,56,57,58], "short":"F4A", "flag": {"x": 3, "y": 6} },
+			{"id":35, "name":"F4B: Oglilyn"     , "connections":[17,18,34,36,58,59], "short":"F4B", "flag": {"x": 5, "y": 5} },
+			{"id":36, "name":"F4C: Omialanto"   , "connections":[7,18,19,35,59,60] , "short":"F4C", "flag": {"x": 7, "y": 4} },
+			{"id":37, "name":"A5A: Appiatoph"   , "connections":[19,38,60]         , "short":"A5A", "flag": {"x": 9, "y": 1} },
+			{"id":38, "name":"A5B: Cuchrarahe"  , "connections":[19,20,37,39]      , "short":"A5B", "flag": {"x":11, "y": 2} },
+			{"id":39, "name":"A5C: Eokkirune"   , "connections":[20,21,38,40]      , "short":"A5C", "flag": {"x":13, "y": 3} },
+			{"id":40, "name":"A5D: Iyoriyaz"    , "connections":[21,22,39,41]      , "short":"A5D", "flag": {"x":15, "y": 4} },
+			{"id":41, "name":"B5A: Strennearial", "connections":[22,40,42]         , "short":"B5A", "flag": {"x":17, "y": 5} },
+			{"id":42, "name":"B5B: Atherathios" , "connections":[22,23,41,43]      , "short":"B5B", "flag": {"x":17, "y": 7} },
+			{"id":43, "name":"B5C: Xeaxudin"    , "connections":[23,24,42,44]      , "short":"B5C", "flag": {"x":17, "y": 9} },
+			{"id":44, "name":"B5D: Stronolyn"   , "connections":[24,25,43,45]      , "short":"B5D", "flag": {"x":17, "y":11} },
+			{"id":45, "name":"C5A: Stuckodod"   , "connections":[25,44,46]         , "short":"C5A", "flag": {"x":17, "y":13} },
+			{"id":46, "name":"C5B: Kazazriel"   , "connections":[25,26,45,47]      , "short":"C5B", "flag": {"x":15, "y":14} },
+			{"id":47, "name":"C5C: Pilitallios" , "connections":[26,27,46,48]      , "short":"C5C", "flag": {"x":13, "y":15} },
+			{"id":48, "name":"C5D: Xishotish"   , "connections":[27,28,47,49]      , "short":"C5D", "flag": {"x":11, "y":16} },
+			{"id":49, "name":"D5A: Gegleadore"  , "connections":[28,48,50]         , "short":"D5A", "flag": {"x": 9, "y":17} },
+			{"id":50, "name":"D5B: Wrorrulan"   , "connections":[28,29,49,51]      , "short":"D5B", "flag": {"x": 7, "y":16} },
+			{"id":51, "name":"D5C: Cleoseotophy", "connections":[29,30,50,52]      , "short":"D5C", "flag": {"x": 5, "y":15} },
+			{"id":52, "name":"D5D: Equioque"    , "connections":[30,31,51,53]      , "short":"D5D", "flag": {"x": 3, "y":14} },
+			{"id":53, "name":"E5A: Eatutiar"    , "connections":[31,52,54]         , "short":"E5A", "flag": {"x": 1, "y":13} },
+			{"id":54, "name":"E5B: Kaweariael"  , "connections":[31,32,53,55]      , "short":"E5B", "flag": {"x": 1, "y":11} },
+			{"id":55, "name":"E5C: Yossiryon"   , "connections":[32,33,54,56]      , "short":"E5C", "flag": {"x": 1, "y": 9} },
+			{"id":56, "name":"E5D: Ecladorth"   , "connections":[33,34,55,57]      , "short":"E5D", "flag": {"x": 1, "y": 7} },
+			{"id":57, "name":"F5A: Udriomond"   , "connections":[34,56,58]         , "short":"F5A", "flag": {"x": 1, "y": 5} },
+			{"id":58, "name":"F5B: Kreamenon"   , "connections":[34,35,57,59]      , "short":"F5B", "flag": {"x": 3, "y": 4} },
+			{"id":59, "name":"F5C: Jokuthriaz"  , "connections":[35,36,58,60]      , "short":"F5C", "flag": {"x": 5, "y": 3} },
+			{"id":60, "name":"F5D: Gleoleaterra", "connections":[19,36,37,59]      , "short":"F5D", "flag": {"x": 7, "y": 2} }
+		]
+	}
+}

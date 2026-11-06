@@ -1,0 +1,150 @@
+/*
+ * Copyright (C) 2026 Forge Hammer
+ * Licensed under AGPL - see LICENSE.md for details.
+ */
+
+:root {
+	--white: #fff;
+	--text: #ebe1cd;
+	--text-link: #48dae7;
+	--text-medium: #93795D;
+	--text-dark: #4c2f1e;
+	--text-dark2: #3f2a1b;
+	--text-darker: #201a18;
+	--ash: #8a8a8a;
+	--text-highlight: #ffa641;
+	--text-highlight2: #d49372;
+
+	--success: #8acb37;
+	--limegreen: #4dbd19;
+	--info-blue: #6db9f8;
+	--danger-red: #f35e5e;
+
+	--border-medium: #7b4b30;
+	--bg-light: #ebe7dd;
+	--bg-medium: #829fb3;
+	--bg-dark: #1b1e1f;
+	--bg-darkest: #141211;
+
+	--window-border: 2px solid #db4a2e;
+	--window-shadow: 0 0 9px 2px #000000aa, 0 0 0px 1px #000000aa;
+	--window-bg: #1f232a;
+
+	--window-body-scroll-bg: #1f232a;
+	--window-body-scroll-border: #1f232a;
+	--window-body-scroll-color: #ebe7dd;
+
+	--window-settings-bg: #212324;
+
+	--window-head-bg: linear-gradient(-45deg, #e5e1cf 80px, #fc7c48 81px, #fc6f44 94px, #fcf8d3 95px, #fff 107px, #fc6f44 108px, #ff8b47);
+	--window-head-text: #1e2228;
+	--window-head-shadow: inset 0 -1px 0 0 #db4a2e;
+	--window-head-btn-bg: url(../images/hud/box-sprite-dark.png), linear-gradient(to bottom, #d9d4ba, #dbd4b3);
+	--window-head-btn-shadow: inset 0 0 0 1px #e0e0e0;
+
+	--btn-bg: linear-gradient(to bottom, #0072a2, #004a70);
+	--btn-bg-disabled: linear-gradient(to bottom, #444444 #2d2d2d);
+	--btn-bg-active: linear-gradient(to bottom, #0982b6, #035a85);
+	--btn-bg-onclick: linear-gradient(to bottom, #117faa, #053163);
+	--btn-bg-green: linear-gradient(to bottom, #359e2b, #176517);
+    --btn-border: 1px solid #16234b;
+    --btn-border-active-color: #133853;
+	--btn-green-color: #dde9ca;
+	--text-btn-disabled: #999;
+	--text-btn: #dcd6d6;
+
+    --switch-text: #dae9e3;
+    --switch-text-active: #f8fdff;
+
+    --input-accent: #b04a2b;
+    --input-bg: #ebe7d9;
+    --input-color: #3f2a1b;
+    --input-border: 1px solid #3f2a1b;
+
+	--btn-bg-red: linear-gradient(to bottom, #7c0d2c, #340510);
+	--btn-bg-red-active: linear-gradient(to bottom, #a71f36,#590d24);
+	--btn-bg-red-onclick: linear-gradient(to bottom, #610a33,#2e0505);
+
+	--tabs-bg: linear-gradient(#3f4a4f, #3f4a4f);
+	--tabs-bg-active: linear-gradient(135deg, #ce4320 10px, #db5e2e 11px);
+	--tabs-bg-shadow: inset 0 2px 0 #5a5155;
+	--tabs-bg-shadow-active: inset 1px 1px 0 0 #e9e8e0, inset -1px 1px 0 0 #e9e8e0;
+	--tabs-border: 2px solid #805d2e;
+	--border-tab: #c3c2ab;
+	--border-tab-vertical: linear-gradient(-75deg, #c3c2ab 25%, #db5e2e 25.5%) 10;
+	--text-tab-active: #fff;
+	--text-tab: #eee;
+
+	--border-table-top: transparent;
+	--border-table-bottom: #0f0f0ea8;
+	--border-table-bottom-darker: #0f0f0e;
+	--table-bg-hover: #57f4ff33;
+	--table-bg-odd: #6cc0cf17;
+	--table-bg-darker: #000f4080;
+	--table-bg-info: #003c6d63;
+	--table-bt-info: transparent;
+	--table-bb-info: #131938;
+	--table-bg-success: #277d094d;
+	--table-bt-success: #367f34;
+	--table-bb-success: #0b350b;
+	--table-bg-error: #7908084d;
+	--table-bt-error: #7a2f2f;
+	--table-bb-error: #4f0e0e;
+	--table-bg-bright: #dd85002e;
+	--table-bt-bright: #dd8e1866;
+	--table-bb-bright: #492e0566;
+	--table-bg-highlight: #071628cc;
+
+	--hud-border-error: #9c2d18;
+	--hud-border-success: #93c554;
+
+	--menu-tooltip-border: 2px solid #292727;
+	--menu-tooltip-bg: #363534;
+	--menu-tooltip-disabled: #f79090;
+	--menu-tooltip-text: #ddd6c6;
+	--menu-tooltip-head-bg: #00528199;
+
+    --tooltip-bg: #0e0e13;
+    --tooltip-text: #ddd6c6;
+
+	--hud-counter-color: #128ebe;
+	--hud-counter-success: #5c8d20;
+	--hud-counter-bg: 1px 0 0 1px #0000003e;
+	--hud-counter-size: 16px;
+
+	--menu-bg: #00000080;
+	--menu-shadow: none;
+	--menu-arrow-bg: linear-gradient(to bottom, #db5e2e, #db532e);
+	--menu-arrow-color: #e5e1cf;
+	--menu-btn-bg-green: linear-gradient(-66deg, #15b9c8 20%, #0093c3 40%) border-box;
+	--menu-btn-bg-red: linear-gradient(to bottom, #6b4e4e, #4b2b2b) border-box;
+	--menu-btn-bg-grey: linear-gradient(#1e2126, #1e2126) border-box;
+	--menu-btn-bg: linear-gradient(#2f373b, #2f3639) padding-box, var(--menu-btn-bg-green);
+	--menu-btn-bg-color: #312c29;
+	--menu-btn-shadow: none;
+	--menu-btn-shadow-disabled: inset 0 0 1px 1px #60261e38;
+	--menu-btn-disabled-bg: var(--menu-btn-bg-grey);
+	--menu-btn-bg-settings: linear-gradient(#2e2e2e,#2e2e2e) padding-box, linear-gradient(to bottom, #8b9396, #536377) border-box;
+	--menu-boxed-head-bg: linear-gradient(-45deg, #e5e1cf 33px, #fc7c48 34px, #fc6f44 47px, #fcf8d3 48px, #fff 60px, #fc6f44 61px, #ff8b47);
+	--menu-boxed-head-shadow: none;
+	--menu-boxed-head-color: #eee;
+
+	--bg-chart: #2227;
+
+	/* static */
+
+	--grey: #444;
+	--black: #000;
+	--black-30: #00000048;
+	--black-50: #00000080;
+	--black-65: #000000a6;
+	--white-65: #ffffffa6;
+}
+
+.window-head, .btn, .btn:not([disabled]):hover, .btn-active:not([disabled]), .btn-active:not([disabled]):hover, #SettingsBoxBody .item-row .check span.toogle-word {
+    text-shadow: none;
+}
+
+.horizontal li {
+	font-family: monospace;
+}

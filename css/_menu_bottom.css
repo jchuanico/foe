@@ -1,0 +1,40 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Licensed under AGPL - see LICENSE.md for details.
+ */
+
+#forgehammer-hud.hud-bottom {
+	left: 1035px;
+	bottom: 0;
+	width: 270px;
+	height: calc(var(--menu-btn-size) + 2px);
+	border-radius: 2px 2px 0 0;
+	transition: all 0.1s ease;
+	border-bottom-width: 0;
+}
+
+.hud-bottom #forgehammer-hud-wrapper {
+	width: 220px;
+	height: inherit;
+	bottom: 0;
+	left: 0;
+}
+
+.hud-bottom #forgehammer-hud-slider {
+	position: absolute;
+	left: 0;
+	top: 0;
+	transition: left 0.7s ease-in-out;
+	height: inherit;
+}
+
+.hud-bottom .hud-btn, .hud-bottom .menu-placeholder {
+	float: left;
+}
+
+.hud-bottom .hud-btn span:first-child {
+	display: inline-flex;
+	width: 80%;
+	height: 80%;
+	margin-top: 10%;
+}

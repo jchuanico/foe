@@ -1,0 +1,154 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Copyright (C) 2026 Forge Hammer
+ * Licensed under AGPL - see LICENSE.md for details.
+ */
+
+
+#ReconstructionListBody {
+    overflow-y: auto;
+}
+#ReconstructionList {
+    height: 400px;
+}
+
+#ReconstructionListBody td:nth-last-child(2){
+  padding-right: 0;
+  text-align: right;
+}
+
+#ReconstructionListBody td:nth-child(3){
+  text-align: center;
+  min-width: 50px;
+}
+
+#ReconstructionListBody tr.sorter-header th:last-child:before, 
+#ReconstructionListBody tr.sorter-header th:last-child:after {
+  left: 5px;
+}
+#ReconstructionListBody tbody.filtering .reconstructionLine:not(.matched) {
+  display: none !important;
+}
+
+
+#ReconstructionMap.window-box, 
+#ReconstructionMap .window-body {
+  background: none;
+  box-shadow: none;
+  border: none;
+}
+#ReconstructionMap.window-box {
+  background: var(--black-15);
+  pointer-events: none;
+  width: 50%;
+  height: 50%;
+  display: flex;
+  flex-direction: column;
+}
+#ReconstructionMap .window-body {
+  text-align: right;
+  overflow-y: hidden !important;
+}
+#ReconstructionMap {
+    left: calc(min(max(50vw + var(--x)),100vw - 60px)) !important;
+}
+#ReconstructionMap .window-head {
+  padding: 2px;
+  width: 300px;
+  align-self: end;
+}
+#ReconstructionMap .window-grippy, 
+#ReconstructionMap .window-head, 
+#ReconstructionMap .settingsbox-wrapper {
+  pointer-events: all;
+}
+#ReconstructionMap .window-grippy {
+  background-color: var(--black-65);
+  padding: 0;
+  bottom: 0;
+  right: 0;
+  border-radius: 9px 4px 4px 4px;
+}
+#hammerBar.reconstruction {
+  margin-left: 0;
+  background: var(--black-50);
+  padding: 5px 5px 7px;
+  top: 0;
+  border-radius: 0 0 5px 0;
+  backdrop-filter: blur(2px);
+}
+#ReconstructionButtons {
+  height: inherit;
+}
+.map-grid-wrapper {
+  position: relative;
+  height: 2000px;
+  width: 2000px;
+  overflow: hidden;
+  --scale: 100;
+  --scale-x: calc(var(--scale) / 100);
+  --scale-y: calc(0.25 * var(--scale) / 100);
+  --tx: calc((-296289 / var(--scale) + 1471) * 1px);
+  --ty: calc((-104533 / var(--scale) + 212) * 1px);
+  transform: skewX(-63.5deg) skewY(14deg) scale(var(--scale-x), var(--scale-y)) translate(var(--tx), var(--ty));
+  opacity: 0.9;
+}
+.map-grid-wrapper .map-bg {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  background-color: var(--black-65);
+  box-sizing: border-box;
+  border: 1px solid var(--black);
+}
+.map-grid-wrapper .map-bg.startarea {
+  width: 320px;
+  height: 320px;
+}
+.map-grid-wrapper .map-building {
+  position: absolute;
+  box-sizing: border-box;
+	background-color: var(--background-color-residential);
+	box-shadow: inset 0 0 0 1px #0004;
+}
+.map-grid-wrapper .map-building-ghost {
+  position: absolute;
+  box-sizing: border-box;
+	background-color: #fff4;
+	border: 1px solid #fff9;
+}
+.map-grid-wrapper .map-building-ghost.street {
+	background-color: #fff9;
+}
+.map-building.production {
+	background-color: var(--background-color-production);
+}
+.map-building.greatbuilding {
+	background-color: var(--background-color-greatbuilding);
+}
+.map-building.main_building {
+	background-color: var(--background-color-main_building);
+}
+.map-building.main_building.matched {
+	background-color: #97e968;
+}
+.map-building.roadless {
+	background-color: var(--background-color-noStreet);
+}
+.map-building.street {
+	background-color: var(--background-color-street);
+}
+.map-building.street.matched {
+	border-color: #096941;
+	background-color: #096941;
+}
+.map-building.matched {
+	background-color: #3cc719d7;
+	border-color: #032007;
+	border-width: 2px;
+}
+.map-building.highlight {
+	background-color: #daffd1d7;
+	border-color: #00e61f;
+	border-width: 2px;
+}

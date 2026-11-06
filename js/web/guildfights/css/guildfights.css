@@ -1,0 +1,389 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Licensed under AGPL - see LICENSE.md for details.
+ */
+
+#GuildPlayers {
+	left: calc(50vw - 285px);
+	top: calc(50vh - 270px);
+	width: 570px;
+	height: 500px;
+}
+
+#GuildPlayersDetailView {
+	left: calc(50vw + 285px);
+	top: calc(50vh - 250px);
+	width: 465px;
+	height: 500px;
+}
+
+#GuildPlayersHeader small {
+	font-weight: lighter;
+}
+
+#GuildPlayersBody,
+#GuildPlayersDetailViewBody {
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+#GuildPlayersBody table tbody {
+	user-select: text;
+}
+
+#GuildPlayersDetailViewBody {
+	user-select: none;
+}
+
+#GuildPlayersBody tr th,
+#GuildPlayersDetailViewBody tr th {
+	background-color: rgba(0, 0, 0, 0.45);
+	line-height: 25px;
+}
+
+#GuildPlayersBody .btn-mid span {
+	padding: 0 3px;
+	border-radius: 3px;
+	background-color: var(--black-50);
+}
+#GuildPlayersBody .btn-mid .counter-red {
+	background-color: var(--table-bb-error);
+}
+
+#GuildPlayersBody tr th span,
+#GuildPlayersDetailViewBody tr th span,
+#GuildPlayersBody tr th img,
+#GuildPlayersDetailViewBody tr th img {
+	display: inline-block;
+	width: 27px;
+	height: 25px;
+	vertical-align: bottom;
+}
+
+#GuildPlayersBody tr th span.negotiation,
+#GuildPlayersDetailViewBody tr th span.negotiation {
+	background: url('../../x_img/negotiation.png') center no-repeat;
+	background-size: contain;
+}
+
+#GuildPlayersBody tr th span.fight,
+#GuildPlayersDetailViewBody tr th span.fight {
+	background: url('../../x_img/fight.png') center no-repeat;
+	background-size: contain;
+}
+
+#GuildPlayersBody tr td img {
+	max-width: 25px;
+	border-radius: 2px;
+}
+
+#GuildPlayersSettingsBox .settingtitle {
+	display: block;
+	margin-bottom: 7px;
+	font-size: 0.9em;
+	text-decoration: underline;
+}
+
+#GuildPlayersDetailViewBody .pname {
+	padding: 10px 5px;
+	color: var(--text-highlight);
+	font-size: 1.0rem;
+}
+
+#GuildPlayersDetailViewBody table tr.hasdetail {
+	position: relative;
+}
+
+#GuildPlayersDetailView table tr.spacer td {
+	border-top-width: 3px;
+}
+
+#GuildPlayersBody table.chevron-right td:last-child {
+	background-image: url('../../../../images/hud/chevron-right.svg');
+	background-size: 20px 20px;
+	background-position: center right;
+	background-repeat: no-repeat;
+	width: 7px;
+}
+
+#GuildPlayersDetailViewBody table tr.hasdetail td:last-child,
+#GuildPlayersDetailViewBody table thead.hasdetail tr th:last-child {
+	background-image: url('../../../../images/hud/chevron-left.svg');
+	background-size: 20px 20px;
+	background-position: center right;
+	background-repeat: no-repeat;
+	width: 7px;
+
+}
+
+#GuildPlayersDetailViewBody table tr.hasdetail.open td:last-child,
+#GuildPlayersDetailViewBody table thead.hasdetail.open tr th:last-child {
+	background-image: url('../../../../images/hud/chevron-down.svg');
+	width: 7px;
+}
+
+#GuildPlayersDetailViewBody tr.open td {
+	color: var(--text-highlight);
+}
+
+#GuildPlayersDetailViewBody .foe-table td.nopadding {
+	padding: 0;
+}
+
+#GuildPlayersDetailViewBody .datetimepicker {
+	padding: 2px 0 0 2px;
+	background-color: var(--bg-darkest);
+	height: 28px;
+}
+
+#GuildPlayersDetailViewBody table.foe-table tr td:last-child,
+#GuildPlayersDetailViewBody table.foe-table tr th:last-child {
+	width: 15px;
+}
+
+/*************************************************************************************************************/
+
+#LiveGuildFighting {
+	left: calc(50vw - 250px);
+	top: calc(50vh - 250px);
+	width: 500px;
+	height: 500px;
+}
+
+#LiveGuildFightingBody {
+	overflow: auto;
+	font-size: 90%;
+}
+
+#LiveGuildFightingBody .province-color, #LiveGuildFightingBody .province-color-round {
+	width: 13px;
+	height: 13px;
+	display: inline-block;
+	border: 1px solid #555;
+	border-radius: 8px;
+	top: 1px;
+	position: relative;
+}
+#LiveGuildFightingBody .battletype {
+	width: 9px;
+	height: 9px;
+	border-radius: 5px;
+	display: inline-block;
+	position: relative;
+	bottom: 2px;
+	margin-left: -6px;
+}
+#LiveGuildFightingBody .battletype.BTattack {
+	background-color: rgb(209, 38, 38);
+}
+#LiveGuildFightingBody .battletype.BTdefence {
+	background-color: rgb(45, 77, 255);
+}
+
+#LiveGuildFightingBody .tabs ul li a span {
+	width: 21px;
+	top: 4px;
+	background-size: 90px 20px;
+}
+
+#LiveGuildFightingBody .tabs ul li.gbgprogress a span {
+	background: transparent url('../../stats/images/tabs.png') -237px 2px no-repeat;
+}
+
+#LiveGuildFightingBody .tabs ul li.gbgowned a span {
+	background: transparent url('../../stats/images/tabs.png') -326px 2px no-repeat;
+}
+
+#LiveGuildFightingBody .tabs ul li.gbgnextup a span {
+	background: transparent url('../../x_img/hourglass.png') no-repeat;
+	background-size: contain;
+	position: relative;
+}
+
+#LiveGuildFightingBody >.btn-group {
+	position: absolute;
+	top: 37px;
+	right: 7px;
+	z-index: 100;
+}
+
+#LiveGuildFightingBody #nextup {
+	overflow: hidden;
+	overflow-y: auto;
+	flex-grow: 2;
+	user-select: text;
+}
+
+#LiveGuildFightingBody #nextup .secure .prov-name b {
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+#LiveGuildFightingBody .focus .province-color {
+	outline: 1px solid var(--white);
+}
+#LiveGuildFightingBody .ignore .province-color {
+	background-image: linear-gradient(-45deg, #0000 46%, var(--white) 46%, var(--white) 54%, #0000 54%);
+}
+
+#LiveGuildFightingBody #progress {
+	width: 100%;
+	overflow: hidden;
+	overflow-y: auto;
+}
+
+#LiveGuildFightingBody #progress tr td:first-child,
+#LiveGuildFightingBody #nextup tr td:first-child {
+	width: 69px;
+}
+
+#LiveGuildFightingBody table.foe-table tr.highlight-row {
+	background-color: var(--table-bg-darker);
+	color: var(--text-highlight);
+}
+
+#LiveGuildFightingBody table.foe-table tr.province-hover {
+	background-color: var(--table-bg-hover);
+}
+
+#LiveGuildFightingBody tr td {
+	transition: background-color .6s;
+}
+
+#LiveGuildFightingBody tr.pulse td {
+	background-color: rgba(208, 200, 172, 0.3);
+	transition: background-color .6s;
+}
+
+#LiveGuildFightingBody .progress {
+	display: block;
+	line-height: 12px;
+	border-radius: 7px;
+	border: 1px solid #333;
+	font-size: 85%;
+	font-weight: bold;
+	margin: 1px 0 0;
+	color: var(--black);
+	text-shadow: none;
+}
+
+#LiveGuildFightingBody .progress::before {
+	content: ' ';
+	display: inline-block;
+	padding: 0 2px;
+}
+
+#LiveGuildFightingBody .smaller {
+	font-size: 8px;
+	bottom: 2px;
+	position: relative;
+}
+
+#LiveGuildFightingBody tr .btn.discord {
+	visibility: hidden;
+}
+
+#LiveGuildFightingBody tr:hover .btn.discord {
+	visibility: visible;
+}
+
+.btn.discord.custom {
+    background-image: url('../../../../images/menu/discord.png'), var(--tabs-bg);
+}
+
+
+
+/*************************************************************************************************************/
+
+#ProvinceMapBody {
+	background: var(--bg-darkest);
+	position: relative;
+}
+
+#ProvinceMap.volcano_archipelago {
+	width: 800px;
+	height: 800px;
+	left: calc(50vw - 280px);
+	top: calc(50vh - 219px);
+}
+
+#ProvinceMap.waterfall_archipelago {
+	width: 800px;
+	height: 800px;
+	left: calc(50vw - 256px);
+	top: calc(50vh - 219px);
+}
+
+#ProvinceMap #province-map-wrap {
+	overflow: hidden;
+	position: relative;
+	height: 100%;
+	width: 100%;
+}
+
+#ProvinceMap #provDetails {
+	position: absolute;
+	bottom: 0.75em;
+	right: 0.75em;
+	padding: 0.75em;
+	background-color: #333;
+	border-radius: 5px;
+	border: 2px solid #222;
+	color: #eee;
+	display: none;
+}
+
+#ProvinceMap #province-map {
+	background-color: var(--bg-darkest);
+	position: relative;
+	height: 100%;
+	margin: 0 auto;
+	display: block;
+}
+
+#ProvinceMap #province-map.zoomed {
+	height: auto;
+}
+
+#ProvinceMap #zoomGBGMap {
+	position: absolute;
+	top: 3px;
+	left: 3px;
+}
+
+#ProvinceMap #switchGBGMap {
+	position: absolute;
+	top: 40px;
+	right: 3px;
+}
+
+#StatsGBGBody {
+	width: 1050px;
+}
+
+#StatsGBGBody {
+	background-color: var(--bg-chart);
+}
+
+#GBGPlayersLegend {
+	height: 48px;
+	overflow: auto;
+}
+
+
+/*************************/
+
+#GBGSeasonOverflow {
+    position: absolute;
+    top: 35px;
+    right: 161px;
+    width: 343px;
+    z-index: 999;
+    border: var(--border-medium),4px,solid;
+	border-radius: 10px;
+    background: var(
+    --bg-darkest);
+    padding: 5px;
+    color: var(
+    --game-text-light);
+}

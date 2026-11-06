@@ -1,0 +1,267 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Licensed under AGPL - see LICENSE.md for details.
+ */
+
+#BackgroundInfo {
+	top: 20%;
+	right: 30px;
+	width: 560px;
+	height: 450px;
+}
+
+#BackgroundInfo #BackgroundInfoBody {
+	overflow: auto;
+}
+
+#BackgroundInfo #BackgroundInfoBody strong {
+	color: var(--text-highlight);
+}
+
+#BackgroundInfo #BackgroundInfoBody .filter-row {
+	line-height: 1rem;
+	display: flex;
+	align-items: center;
+	background: var(--black-50);
+	padding: 5px;
+}
+
+#BackgroundInfo #BackgroundInfoBody .filter-row span.arrow {
+	top: 7px;
+}
+
+#BackgroundInfo #BackgroundInfoBody .filter-row span input {
+	position: relative;
+	margin: 0;
+	top: 2px;
+}
+
+#BackgroundInfo #BackgroundInfoBody .filter-row .btn-reset-box {
+	margin-left: auto;
+}
+
+#BackgroundInfo #BackgroundInfoBody .offer {
+	display: flex;
+	align-items: center;
+}
+
+#BackgroundInfo #BackgroundInfoBody .offer span {
+	margin-right: 3px;
+	width: 28px;
+	height: 28px;
+	display: inline-block;
+}
+
+#BackgroundInfo #BackgroundInfoBody .offer span.sign {
+	position: relative;
+	font-size: 1.7rem;
+	line-height: 14px;
+	width: 16px;
+}
+
+#BackgroundInfoList li {
+	justify-content: space-between;
+	position: relative;
+	background: transparent;
+}
+
+#BackgroundInfoList .icon {
+	background: url('../../x_img/gbg-gray.png') center center no-repeat;
+	background-size: contain;
+	width: 30px;
+	height: 30px;
+}
+
+#BackgroundInfoList .main {
+	width: calc(100% - 30px);
+}
+
+#BackgroundInfoList .fav {
+	position: absolute;
+	top: 0;
+	right: 2px;
+	opacity: 0.5;
+	border-radius: 20px;
+}
+
+#BackgroundInfoList .welcome .fav {
+	display: none;
+}
+
+#BackgroundInfoList .fav:hover, #BackgroundInfoList .fav.active {
+	opacity: 0.9;
+	color: var(--text-highlight);
+}
+
+#BackgroundInfoList [class*=msg] .content {
+	font-size: 90%;
+}
+
+#BackgroundInfoList .welcome {
+	-webkit-backdrop-filter: brightness(1.1) saturate(1.1);
+	backdrop-filter: brightness(1.1) saturate(1.1);
+}
+
+#BackgroundInfoList .welcome .icon {
+	background-image: url('../../../../images/menu/info.png');
+	background-size: 30px;
+}
+
+#BackgroundInfoList [class*=msg] .icon {
+	background-image: url('../../x_img/msg.png');
+	background-size: 25px;
+}
+
+#BackgroundInfoList [class*=msg-important] .icon {
+	background-image: url('../../x_img/msg-important.png');
+	background-size: 25px;
+}
+
+#BackgroundInfoList [class*=msg-favorite] .icon {
+	background-image: url('../../x_img/msg-favorite.png');
+	background-size: 25px;
+}
+
+#BackgroundInfoList .auction .icon {
+	background-image: url('../../x_img/ant.png');
+	background-size: 30px;
+}
+
+#BackgroundInfoList .ge .icon {
+	background-image: url('../../x_img/ge.png');
+	background-size: 30px;
+}
+
+#BackgroundInfoList [class*=qi] .icon {
+	background-image: url('../../x_img/qi.png');
+	background-size: 30px;
+	position: relative;
+}
+
+#BackgroundInfoList [class*=qi] .icon::after {
+	background-image:url('../../x_img/qinodes.png');
+	background-size: auto 20px;
+	width: 20px;
+	height: 20px;
+	content: '';
+	display: block;
+	position: absolute;
+	bottom: -2px;
+	right: -2px;
+}
+
+#BackgroundInfoList [class*=qi] .icon::before {
+	width: 10px;
+	height: 10px;
+	content: '';
+	display: block;
+	position: absolute;
+	bottom: 0;
+	left: -2px;
+	border-radius: 30px;
+}
+
+#BackgroundInfoList [class*=defending] .icon::before {
+	background-color: var(--def);
+	box-shadow: 0 0 3px var(--black);
+}
+
+#BackgroundInfoList [class*=attacking] .icon::before {
+	background-color: var(--att);
+	box-shadow: 0 0 3px var(--black);
+}
+
+#BackgroundInfoList [class*=stronghold] .icon::after {
+	background-position: -64px 0;
+}
+
+#BackgroundInfoList [class*=mini] .icon::after {
+	background-position: -86px 0;
+}
+
+#BackgroundInfoList [class*=final] .icon::after {
+	background-position: -108px 0;
+}
+
+#BackgroundInfoList [class*=resources] .icon::after {
+	background-position: -130px 0;
+}
+
+#BackgroundInfoList [class*=regular] .icon::after {
+	background-position: -156px 0;
+}
+
+#BackgroundInfoList [class*=garrison] .icon::after {
+	background-position: -180px 0;
+}
+
+#BackgroundInfoList .level .icon {
+	background-image: url('../../x_img/gb.png');
+}
+
+#BackgroundInfoList .trade .icon {
+	background-image: url('../../x_img/trade.png');
+	background-size: 25px;
+}
+
+#BackgroundInfoList .gbg-red .icon {
+	background-image: url('../../x_img/gbg-red.png');
+}
+
+#BackgroundInfoList .gbg-green .icon {
+	background-image: url('../../x_img/gbg-green.png');
+}
+
+#BackgroundInfoList .gbg-yellow .icon {
+	background-image: url('../../x_img/gbg-yellow.png');
+}
+
+#BackgroundInfoList .gbg-teal .icon {
+	background-image: url('../../x_img/gbg-teal.png');
+}
+
+#BackgroundInfoList .gbg-orange .icon {
+	background-image: url('../../x_img/gbg-orange.png');
+}
+
+#BackgroundInfoList .gbg-blue .icon {
+	background-image: url('../../x_img/gbg-blue.png');
+}
+
+#BackgroundInfoList .gbg-purple .icon {
+	background-image: url('../../x_img/gbg-purple.png');
+}
+
+#BackgroundInfoList .gbg-pink .icon {
+	background-image: url('../../x_img/gbg-pink.png');
+}
+
+#BackgroundInfoList .gbg-lock .icon {
+	background-image: url('../../x_img/gbg-lock.png');
+	background-size: 30px;
+}
+
+#BackgroundInfoList .gbg-undefined .icon {
+	background-image: url('../../x_img/gbg-undefined.png');
+}
+
+#BackgroundInfoList a[target="_blank"] {
+	color: var(--text);
+	text-decoration: underline;
+}
+
+#BackgroundInfoList a[target="_blank"] svg {
+	fill: var(--text);
+}
+
+input.textfilter{
+    width: 100%;
+    width: -moz-available;          /* WebKit-based browsers will ignore this. */
+    width: -webkit-fill-available;  /* Mozilla-based browsers will ignore this. */
+    width: fill-available;
+}
+
+#BackgroundInfo .dropdown ul {
+	max-height: 130px;
+	overflow: auto;
+}

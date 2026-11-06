@@ -1,0 +1,9 @@
+#mapTradeWarningDialog {
+    top: calc(50vh + 180px);
+    left: calc(50vw - 170px);
+    width: 183px;
+}
+
+#mapTradeWarningDialogBody {
+    font-size: 90%;
+}

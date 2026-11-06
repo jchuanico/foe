@@ -1,0 +1,139 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Licensed under AGPL - see LICENSE.md for details.
+ */
+
+// Quest is aborted?
+FH.proxy.addRequestHandler('QuestService', 'abortQuest', (postData) => {
+	if(postData['requestClass'] === 'QuestService' && postData['requestMethod'] === 'abortQuest'){
+		Quests.UpdateCounter();
+	}
+	Quests.DeactivateRival();
+});
+
+FH.proxy.addRequestHandler('GreatBuildingsService', 'getConstruction', (postData) => {
+	Quests.DeactivateRival();
+});
+FH.proxy.addRequestHandler("ChallengeService", 'all', (postData) => {
+	Quests.DeactivateRival();
+});
+
+FH.proxy.addCustomHandler('QuestsUpdated', data => {
+	if ($('#bonus-hud').length > 0) return;
+	if (!Settings.GetSetting('RivalSound')) return;
+	if (Quests.RivalInActive) return;
+	if (!FH.Main.Quests) return; 
+	for (let Quest of FH.Main.Quests) {
+		if (Quest?.questGiver?.id.indexOf("rival") >=0 && Quest.state == 'collectReward') {
+			FH.helper.sounds.play("BonusService");
+			break;
+		}
+	}
+});
+
+
+/**
+ * @type {{InsertStorage: Quests.InsertStorage, init: Quests.init, Counter: number, Date: null, UpdateCounter: Quests.UpdateCounter}}
+ */
+let Quests = {
+	RivalInActive: null,
+	Counter: 2000,
+	Date: null,
+
+	DeactivateRival: () => {
+		if (Quests.RivalInActive) {
+			clearTimeout(Quests.RivalInActive);
+		}
+		Quests.RivalInActive = setTimeout(() => {
+			Quests.RivalInActive = null;
+		}, 1000)
+	},
+
+	init: ()=> {
+
+		let CounterStorage = FH.Storage.getItem('QuestCounter'),
+			parts;
+
+		Quests.Date = moment(FH.Main.getCurrentDate()).format('YYYY-MM-DD');
+
+		if(CounterStorage !== null)
+		{
+			parts = JSON.parse(CounterStorage);
+
+			// current is older than stored date
+			if (!parts || !parts['date'] || moment(moment(FH.Main.getCurrentDate()).format('YYYY-MM-DD')).isAfter(parts['date'])){
+				Quests.Counter = 2000;
+			}
+			// is today
+			else {
+				Quests.Counter = parts['counter'];
+				Quests.Date = parts['date'];
+			}
+		}
+		else {
+			Quests.InsertStorage();
+		}
+
+
+		if (!Settings.GetSetting('Show2kQuestMark')) {
+			return;
+		}
+
+		FH.HTML.AddCssFile('quests');
+
+		// some html for visual view
+		let div = $('<div />');
+
+		div.attr({
+			id: 'quests-counter-hud',
+			class: 'game-cursor'
+		});
+
+		$('body').append(div).promise().done(function(){
+			$('#quests-counter-hud').append(
+				$('<div />')
+					.addClass('hud-btn-gold')
+					.attr('title', 'Forge Hammer: ' + FH.t('Quests.CounterTooltip.Content'))
+					.tooltip({
+						extraClass: 'quest-tooltip',
+						placement: 'right'
+					})
+					.append(
+						$('<span />')
+							.attr('id', 'quest-counter-value')
+							.text( Quests.Counter )
+					)
+			);
+		});
+
+	},
+
+
+	/**
+	 * Count down und save to LocalStorage
+	 *
+	 * @constructor
+	 */
+	UpdateCounter: ()=> {
+		Quests.Counter--;
+
+		if (Settings.GetSetting('Show2kQuestMark')) {
+			$('#quest-counter-value').text(Quests.Counter);
+		}
+
+		Quests.InsertStorage();
+	},
+
+
+	/**
+	 * Write data to LocalStorage
+	 *
+	 * @constructor
+	 */
+	InsertStorage:()=> {
+		FH.Storage.setItem('QuestCounter', JSON.stringify({
+			counter: Quests.Counter,
+			date: Quests.Date
+		}));
+	}
+};

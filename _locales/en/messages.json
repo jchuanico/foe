@@ -1,0 +1,10 @@
+{
+	"appName": {
+		"message": "Forge Hammer",
+		"description": "Enhance your Forge of Empires Experience"
+	},
+	"appDesc": {
+		"message": "Small tools for all parts of Forge of Empires",
+		"description":"Faster GB contributions, easier battlegrounds management, tools for your guild, review your citys buildings and much more."
+	}
+}

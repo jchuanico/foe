@@ -1,0 +1,256 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Licensed under AGPL - see LICENSE.md for details.
+ */
+
+FH.proxy.addHandler('ChestEventService', 'getOverview', (data, postData) => {
+
+	// is activated?
+	if(!Settings.GetSetting('ShowEventChest')){
+		return;
+	}
+
+    let Chests = data.responseData['chests'];
+
+    let ChestData = [];
+    for (let i in Chests) {
+        if (!Chests.hasOwnProperty(i)) continue;
+
+        let CurrentChest = [];
+        if (!Chests[i]['cost'] || !Chests[i]['cost']['resources']) continue;
+        CurrentChest['cost'] = 0;
+
+        for (let ResourceName in Chests[i]['cost']['resources']) {
+            if (!Chests[i]['cost']['resources'].hasOwnProperty(ResourceName)) continue;
+            CurrentChest['cost'] += Chests[i]['cost']['resources'][ResourceName];
+        }
+
+        if (!Chests[i]['grandPrizeContribution']) continue;
+        CurrentChest['grandPrizeContribution'] = Chests[i]['grandPrizeContribution'];
+
+        if (!Chests[i]['chest'] || !Chests[i]['chest']['possible_rewards']) continue;
+        let PossibleRewards = Chests[i]['chest']['possible_rewards'];
+
+        for (let j = 0; j < PossibleRewards.length; j++) {
+            if (!PossibleRewards[j]['reward'] || !PossibleRewards[j]['reward']['flags']) continue;
+            if (PossibleRewards[j]['reward']['flags'].includes('timedSpecial')) {
+                CurrentChest['dailyprizename'] = PossibleRewards[j]['reward']['name'];
+                if (!CurrentChest['drop_chance']) CurrentChest['drop_chance'] = 0;
+                CurrentChest['drop_chance'] += PossibleRewards[j]['drop_chance'];
+            }
+        }
+
+        CurrentChest['costpermainprizestep'] = CurrentChest['cost'] / CurrentChest['grandPrizeContribution'];
+        CurrentChest['costperdailyprize'] = CurrentChest['cost'] * 100 / CurrentChest['drop_chance'];
+
+        ChestData[ChestData.length] = CurrentChest;
+    }
+
+    // Ungültige Daten => Event wird nicht unterstützt => Fenster nicht anzeigen
+    if (ChestData.length === 0) return;
+
+    EventChests.Chests = ChestData;
+    EventChests.Show();
+});
+
+FH.proxy.addHandler('PresentGameService', 'getOverview', (data, postData) => {
+
+	if(!Settings.GetSetting('ShowEventChest') || !(Settings.GetSetting('EventHelperPresent') === undefined ? true : Settings.GetSetting('EventHelperPresent'))) return;
+    let presents = data.responseData.presentList
+
+    let presentData = []
+    for (let present of presents) {
+        presentData.push(present)
+    }
+
+    if (presentData.length === 0) return
+    EventPresents.Presents = presentData
+
+    EventPresents.Show()
+});
+
+FH.proxy.addHandler('PresentGameService', 'openPresent', (data, postData) => {
+
+	if(!Settings.GetSetting('ShowEventChest')) return
+    let presents = data.responseData.updatedPresentList
+
+    for (let present of presents) {
+        EventPresents.Presents[present.presentId || 0] = present
+    }
+
+    EventPresents.Show()
+});
+
+FH.proxy.addHandler('PresentGameService', 'useBooster', (data, postData) => {
+
+	if(!Settings.GetSetting('ShowEventChest')) return
+    let presents = data.responseData.updatedPresentList
+
+    for (let present of presents) {
+        EventPresents.Presents[present.presentId || 0] = present
+    }
+
+    EventPresents.Show()
+});
+
+let EventPresents = {
+    Presents: null,
+
+    Show: () => {
+        if ($('#eventpresents').length === 0) {
+            FH.HTML.Box({
+                'id': 'eventpresents',
+                'title': FH.t('Boxes.EventPresents.Title'),
+                'auto_close': true,
+                'dragdrop': true,
+                'minimize': true,
+                'resize': true,
+			    active_maps:"main"
+            });
+
+            FH.HTML.AddCssFile('eventchests');
+
+            Unit.PrepareCoords();
+        }
+
+        EventPresents.BuildBox();
+    },
+
+    BuildBox: () => {
+        let h = [];
+
+        // change when needed!
+        const currencyName1 = 'arthur_event_token_common';
+        const currencyName2 = 'arthur_event_token_rare';
+
+        h.push('<table class="foe-table">');
+        for (let present of EventPresents.Presents) {
+            let icon;
+            let frag = "";
+
+            if (present.status.value !== "used") {
+                h.push(`<tr class="${present.status.value}">`);
+
+                if(present.reward.type === "unit") {
+                    asset = present.reward.subType
+                } else if (present.reward.type=="building") {
+                    asset =  FH.Main.CityEntities[present.reward.subType].asset_id
+                } else {
+                    asset =  present.reward.iconAssetName
+                }
+                if (asset == "icon_fragment") {
+                    if (present.reward.assembledReward.type=="building") 
+                        asset = FH.Main.CityEntities[present.reward.assembledReward.subType].asset_id
+                    else 
+                        asset = present.reward.assembledReward.iconAssetName
+                    frag = '<span class="fragment">'+srcLinks.icons("icon_tooltip_fragment")+'</span>';
+                }  
+                icon = `<img src="${srcLinks.getReward(asset)}" alt="">`;
+
+                h.push('<td class="icon">'+ (icon.search("antiquedealer_flag") === -1 ? icon : '') + frag + '</td>');
+                h.push(`<td>
+                    ${present.reward.name} `);
+
+                    let warning = false;
+
+                    // warning for currency overflow
+                    if (present.reward.subType === (currencyName1) || present.reward.subType === (currencyName2)) {
+                        let currency = present.reward.subType;
+                        let currencyInfo = FH.Goods.Data[currency];
+                        let currencyCapAmount = currencyInfo?.abilities?.resourceCap?.amount || null;
+                        if (currencyCapAmount) {
+                            if (FH.RessourceStock[currency] === (currencyCapAmount-1))
+                                warning = true;
+                        }
+                        h.push(`${(currencyCapAmount ? `&middot; <i ${warning ? ' class="danger"' : ''}>${FH.RessourceStock[currency]}/${currencyCapAmount}</i>` : '')}`);
+                    }
+                    h.push(`${(present.status.value === "visible" ? '<img class="visible" src="' + FH.extUrl + 'images/hud/open-eye.png" alt="">' : '')}
+                    </td>`);
+                h.push('</tr>');
+            }
+        }
+
+        h.push('</table>');
+
+        $('#eventpresentsBody').html(h.join(''));
+    }
+}
+
+
+let EventChests = {
+    Chests: null,
+
+    Show: () => {
+        return;
+        if ($('#eventchests').length === 0) {
+            FH.HTML.Box({
+                'id': 'eventchests',
+                'title': FH.t('Boxes.EventChests.Title'),
+                'auto_close': true,
+                'dragdrop': true,
+                'minimize': true,
+			    active_maps:"main"
+            });
+
+            FH.HTML.AddCssFile('eventchests');
+        }
+
+        EventChests.BuildBox();
+    },
+
+    BuildBox: () => {
+        EventChests.CalcBody();
+    },
+
+    CalcBody: () => {
+        let h = [];
+
+        h.push('<table class="foe-table">');
+        h.push('<thead>' +
+            '<tr>' +
+            '<th colspan="3" class="text-center">' + FH.t('Boxes.EventChests.MainPrize') + '</th>' +
+            '<th colspan="3" class="text-center">' + FH.t('Boxes.EventChests.MainPrizeTitle') + '</th>' +
+            '</tr>' +
+
+            '<tr>' +
+            '<th class="text-center">' + FH.t('Boxes.EventChests.Cost') + '</th>' +
+            '<th class="text-center">' + FH.t('Boxes.EventChests.Steps') + '</th>' +
+            '<th class="text-center">' + FH.t('Boxes.EventChests.CostPerStep') + '</th>' +
+            '<th class="text-center">' + FH.t('Boxes.EventChests.Chance') + '</th>' +
+            '<th class="text-center">' + FH.t('Boxes.EventChests.CostPerPrize') + '</th>' +
+            '<th class="text-center">' + FH.t('Boxes.EventChests.Cost') + '</th>' +
+            '</tr>' +
+
+            '</thead>');
+
+        let BestMainPrizeCost = 999999,
+            BestDailyPrizeCost = 999999;
+
+        for (let i in EventChests.Chests) {
+            if (!EventChests.Chests.hasOwnProperty(i)) continue;
+
+            BestMainPrizeCost = Math.min(BestMainPrizeCost, EventChests.Chests[i]['costpermainprizestep']);
+            BestDailyPrizeCost = Math.min(BestDailyPrizeCost, EventChests.Chests[i]['costperdailyprize']);
+        }
+
+        for (let i in EventChests.Chests) {
+            if (!EventChests.Chests.hasOwnProperty(i)) continue;
+            let isBestDaily = EventChests.Chests[i]['costperdailyprize'] <= BestDailyPrizeCost;
+            let isBestMain = EventChests.Chests[i]['costpermainprizestep'] <= BestMainPrizeCost;
+            h.push('<tr>');
+            h.push('<td class="text-center text-bold ' + ( isBestMain ? ' text-success' : 'text-warning') + '">' + EventChests.Chests[i]['cost'] + '</td>');
+
+            h.push('<td class="text-center">' + EventChests.Chests[i]['grandPrizeContribution'] + '</td>');
+            h.push('<td class="text-center border-right' + (isBestMain ? ' text-success text-bold' : '') + '">' + FH.Main.round(EventChests.Chests[i]['costpermainprizestep'] * 10) / 10 + '</td>');
+
+            h.push('<td class="text-center border-left">' + EventChests.Chests[i]['drop_chance'] + '%</td>');
+            h.push('<td class="text-center' + ( isBestDaily? ' text-success text-bold' : '') + '">' + FH.Main.round(EventChests.Chests[i]['costperdailyprize']) + '</td>');
+            h.push('<td class="text-center text-bold ' + (isBestDaily ? ' text-success' : 'text-warning') + '">' + EventChests.Chests[i]['cost'] + '</td>');
+            h.push('</tr>');
+        }
+
+        h.push('</table>');
+
+        $('#eventchestsBody').html(h.join(''));
+    },
+};

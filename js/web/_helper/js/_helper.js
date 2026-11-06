@@ -1,0 +1,1194 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Licensed under AGPL - see LICENSE.md for details.
+ */
+
+/*
+Example:
+
+let peoples = [
+    {name: 'Jean', lastname: 'Rodrigues', points: 30},
+    {name: 'Sara', lastname: 'Hope', points: 30},
+    {name: 'Igor', lastname: 'Leroy', points: 25},
+    {name: 'Foo', lastname: 'Bar', points: 55}
+];
+
+// sort this list by points, if points is equal, sort by name.
+let ranking = helper.arr.multisort(peoples, ['points', 'name'], ['DESC','ASC']);
+
+*/
+{
+let helper = {};
+helper.str = {
+	/**
+	 * Function to copy string to clipboard
+	 *
+	 * <a href="/param">@param</a> {string} [textToCopy] Source string
+	 */
+	copyToClipboard: async(textToCopy) => {
+		if (!document.hasFocus()) return;
+		if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+			return navigator.clipboard.writeText(textToCopy);
+		} else {
+			return new Promise(async (resolve) => {
+				let copyFrom = $('<textarea/>');
+				copyFrom.text(textToCopy);
+				$('body').append(copyFrom);
+				copyFrom.select();
+				document.execCommand('copy');
+				copyFrom.remove();
+				resolve();
+			});
+		}
+	},
+
+	copyToClipboardLegacy: (textToCopy) => {
+		let copyFrom = $('<textarea/>');
+		copyFrom.text(textToCopy);
+		$('body').append(copyFrom);
+		copyFrom.select();
+		document.execCommand('copy');
+		copyFrom.remove();
+	},
+
+	cleanup: (textToCleanup) => {
+		return textToCleanup.toLowerCase().replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/[\W_ ]+/g, '')
+	},
+	/**
+	 * Replaces variables in a string with arguments
+	 *
+	 * @param string
+	 * @param args
+	 * @returns {*}
+	 */
+	Replacer: (string, args) => {
+		if (string === undefined || args === undefined) {
+			return;
+		}
+
+		for (let key in args) {
+			if (!args.hasOwnProperty(key)) {
+				break;
+			}
+
+			const regExp = new RegExp('__' + key + '__', 'g');
+			string = string.replace(regExp, args[key]);
+		}
+		return string;
+	},
+};
+
+helper.arr = {
+	/**
+	 * Function to sort multidimensional array
+	 *
+	 * <a href="/param">@param</a> {array} [arr] Source array
+	 * <a href="/param">@param</a> {array} [columns] List of columns to sort
+	 * <a href="/param">@param</a> {array} [order_by] List of directions (ASC, DESC)
+	 * @returns {array}
+	 */
+	multisort: function(arr, columns, order_by) {
+		if(typeof columns == 'undefined') {
+			columns = [];
+			for(let x = 0; x < arr[0].length; x++) {
+				columns.push(x);
+			}
+		}
+
+		if(typeof order_by == 'undefined') {
+			order_by = [];
+			for(let x = 0; x < arr[0].length; x++) {
+				order_by.push('ASC');
+			}
+		}
+
+		function multisort_recursive(a, b, columns, order_by, index) {
+			var direction = order_by[index] === 'DESC' ? 1 : 0;
+
+			var is_numeric = !isNaN(+a[columns[index]] - +b[columns[index]]);
+
+
+			var x = is_numeric ? +a[columns[index]] : a[columns[index]].toLowerCase();
+			var y = is_numeric ? +b[columns[index]] : b[columns[index]].toLowerCase();
+
+
+
+			if(x < y) {
+				return direction === 0 ? -1 : 1;
+			}
+
+			if(x === y)  {
+				return columns.length-1 > index ? multisort_recursive(a, b, columns, order_by,index+1) : 0;
+			}
+
+			return direction === 0 ? 1 : -1;
+		}
+
+		return arr.sort(function(a, b) {
+			return multisort_recursive(a, b, columns, order_by,0);
+		});
+	}
+};
+
+helper.permutations = (()=>{
+	const permutations = function *(elements) {
+		if (elements.length === 1) {
+			yield elements;
+		} else {
+			let [first, ...rest] = elements;
+			for (let perm of permutations(rest)) {
+				for (let i = 0; i < elements.length; i++) {
+					let start = perm.slice(0, i);
+					let rest = perm.slice(i);
+					yield [...start, first, ...rest];
+				}
+			}
+		}
+	};
+	return permutations;
+})();
+
+helper.sounds = {
+	ping: new Audio(FH.extUrl + 'vendor/sounds/ping.mp3'),
+	_cache: {},
+
+	/**
+	 * @param {string} [moduleId] e.g. "Calculator", "BonusService"
+	 * @returns {string} sound file name
+	 */
+	getSoundFile: (moduleId) => {
+		let perModule = moduleId ? FH.Storage.getItem('hammerSound_' + moduleId) : null,
+			file = perModule || FH.Storage.getItem('hammerSound') || 'message';
+
+		return file.replace(/^on$/, 'message'); //temporary fix for faulty setting
+	},
+
+	/**
+	 * @param {string} file sound file name
+	 */
+	playFile: (file) => {
+		if (!helper.sounds._cache[file]) {
+			helper.sounds._cache[file] = new Audio(FH.extUrl + 'vendor/sounds/' + file + '.mp3');
+		}
+
+		helper.sounds._cache[file].play();
+	},
+
+	/**
+	 * @param {string} [moduleId]
+	 */
+	play: (moduleId) => {
+		if (!Settings.GetSetting('EnableSound')) return;
+
+		helper.sounds.playFile(helper.sounds.getSoundFile(moduleId));
+	},
+};
+
+helper.preloader = { 
+	show: function(id) {
+		$(id+' .loading-data').remove();
+		$(id).append('<div class="loading-data"><div class="loadericon"></div></div>');
+	},
+
+	hide: function(id) {
+		$(id+' .loading-data').fadeOut(600, 'easeInCubic', function () {
+			$(this).remove();
+		})
+	}
+};
+
+
+/**
+ * Load a JavaScript file into the page.
+ * @param {string} src - URL to load
+ * @returns {Promise<void>}
+ */
+helper.promisedLoadCode = (src) => {
+	return new Promise((resolve, reject) => {
+		let sc = document.createElement('script');
+		sc.src = src;
+		sc.addEventListener('load', function () {
+			this.remove();
+			resolve();
+		});
+		sc.addEventListener('error', function () {
+			console.error('error loading script ' + src);
+			this.remove();
+			reject();
+		});
+		(document.head || document.documentElement).appendChild(sc);
+	});
+};
+
+/**
+ * @returns {Promise<void>}
+ */
+helper.loadChartJS = () => {
+	async function load() {
+		const baseUrl = FH.extUrl + 'vendor/';
+		const sources = [
+			'chartjs/chart.umd.min.js',
+			'chartjs/chartjs-adapter-moment.min.js',
+			'hammerjs/hammer.min.js',
+			'chartjs/chartjs-plugin-zoom.min.js',
+		];
+
+		for (const file of sources) {
+			await helper.promisedLoadCode(baseUrl + file);
+		}
+	}
+
+	if (!helper._chartJSPromise) {
+		helper._chartJSPromise = load();
+	}
+
+	return helper._chartJSPromise;
+};
+let HTML = {
+
+	customFunctions: {},
+
+	/**
+	 * Registry of all boxes that were created with `popout: true`
+	 * id => {args, hooks}
+	 */
+	Boxes: {},
+
+	callCustomFunction: (id) => {
+		const callback = HTML.customFunctions[id];
+
+		if (typeof callback === 'function') {
+			callback();
+		}
+	},
+	IsReversedFloatFormat: undefined,
+
+	/**
+	 * Creates an HTML box in the DOM
+	 *
+	 * id
+	 * title
+	 * ask = null
+	 * auto_close = true
+	 * onlyTitle = title
+	 * dragdrop = true
+	 * resize = false
+	 * speaker = false
+	 * minimize = true
+	 * saveCords = true
+	 * scrollable = false
+	 *
+	 * @param args
+	 */
+	Box: (args) => {
+
+		let title = $('<span />').addClass('title');
+		
+		if (args['onlyTitle'] !== true) {
+			title = $('<span />').addClass('title').html((FH.BaseData.extVersion.indexOf("beta") > -1 ? '(Beta) ': '') + args['title'] + ' <small>🔨</small>');
+		}
+		let	buttons = $('<div />').attr('id', args['id'] + 'Buttons').addClass('box-buttons'),
+			head = $('<div />').attr('id', args['id'] + 'Header').attr('class', 'window-head').append(title),
+			body = $('<div />').attr('id', args['id'] + 'Body').attr('class', 'window-body'),
+			div = $('<div />').attr('id', args['id']).attr('class', 'window-box open').append(head).append(body).hide(),
+			cords = FH.Storage.getItem(args['id'] + 'Cords');
+		
+		// close button
+		let close = $('<span />').attr('id', args['id'] + 'close').addClass('window-close');
+
+		if (args['auto_close'] !== false) {
+			buttons.append(close);
+		}
+		if (args['scrollable'] !== false) {
+			body.addClass('scrollable');
+		}
+		if (args["active_maps"] && args["active_maps"].length > 0) {
+			let maps = args["active_maps"].replace(" ","").split(",").map(x => "ActiveOn"+x);
+			div.addClass("MapActivityCheck "+maps.join(" "));
+		}
+		// minimize
+		if (args['minimize']) {
+			let min = $('<span />').addClass('window-minimize');
+			buttons.prepend(min);
+		}
+
+		// insert a wrench icon, set a click event on it
+		if (args['settings']) {
+			let set = $('<span />').addClass('window-settings').attr('id', `${args['id']}-settings`);
+			buttons.prepend(set);
+
+			if (typeof args['settings'] !== 'boolean') {
+				HTML.customFunctions[`${args['id']}Settings`] = args['settings'];
+			}
+		}
+
+		// pop-out button, enabled per box with `popout: true` or `popout: {w, h, onPopout, onDock, onResize}`
+		if (args['popout']) {
+			let pop = $('<span />')
+				.addClass('window-popout')
+				.attr('id', `${args['id']}-popout`)
+				.attr('title', FH.t('Boxes.PopOut.Button'));
+
+			buttons.prepend(pop);
+
+			HTML.Boxes[args['id']] = {
+				args: args,
+				hooks: (typeof args['popout'] === 'object' && args['popout'] !== null) ? args['popout'] : {}
+			};
+		}
+
+		if (args['custom_buttons']) {
+			if (typeof args.custom_buttons === "object") {
+				for (const button of args.custom_buttons) {
+					let set = $('<span />').addClass(button.class).attr('id', `${args['id']}${button.class}`);
+					buttons.prepend(set);
+
+					HTML.customFunctions[args['id']+button.class] = button.callback;
+				}
+			}
+		}
+
+		// Sounds (was in the calculators)
+		if (args['speaker']) {
+			let spk = $('<span />').addClass('window-speaker').attr('id', args['speaker']);
+			buttons.prepend(spk);
+
+			$('#' + args['speaker']).addClass(FH.Storage.getItem(args['speaker']));
+		}
+		
+		// Position von beweglichen Fenstern initialisieren und Verhindern, dass Fenster außerhalb plaziert werden
+		if (args.dragdrop) div.css({"--x": "-40vw","--y": "-40vh","left":"calc(min(max(50vw + var(--x),0px),100vw - 60px))","top":"calc(min(max(50vh + var(--y),0px), 100vh - 60px))"});
+
+		// load saved coords
+		if (cords) {
+			if (cords.includes('|')) {
+				cords = cords.split('|') 
+				cords = mouseActions.calcCoords([Number(cords[1]), Number(cords[0])], "Center")
+			} else {
+				cords = JSON.parse(cords)
+			}
+			// Verhindere, dass Fenster außerhalb plaziert werden
+			div.css({"--x": cords[0]+"px","--y": cords[1]+"px"});
+		}
+
+		// link to documentation
+		if (args['ask']) {
+			let ask = $('<span />').addClass('window-ask').attr('data-url', args['ask']);
+			buttons.prepend(ask);
+		}
+
+		if (args['class']) {
+			div.addClass(args['class']);
+		}
+
+		head.append(buttons);
+
+		// wenn Box im DOM, verfeinern
+		$('body').append(div).promise().done(function () {
+
+			// necessary delay hack
+			setTimeout(() => {
+				HTML.BringToFront(div);
+			}, 300);
+
+			$("#"+args['id'] + 'Header .box-buttons span').on("pointerdown",(e)=>{
+				e.stopPropagation()
+			})
+
+			if (args['auto_close']) {
+				$(`#${args.id}`).on('click', `#${args['id']}close`, function () {
+
+					// remove settings box if open
+					$(`#${args.id}`).find('.settingsbox-wrapper').remove();
+
+					$('#' + args['id']).fadeToggle('fast', function () {
+						$(this).remove();
+						FH.Tooltips.deactivate()
+						$("div.tooltip").remove();
+					});
+				});
+			}
+
+			if (args['ask']) {
+				$(`#${args.id}`).on('click', '.window-ask', function () {
+					window.open($(this).data('url'), '_blank');
+				});
+			}
+
+			if (args['dragdrop']) {
+				HTML.DragBox(document.getElementById(args['id']), args['saveCords']);
+
+				// is there a callback function?
+				if (typeof args['dragdrop'] !== 'boolean') {
+					HTML.customFunctions[args['id']] = args['dragdrop'];
+				}
+			}
+
+			if (args['settings']) {
+				if (typeof args['settings'] !== 'boolean') {
+					$(`#${args['id']}`).on('click', `#${args['id']}-settings`, function () {
+
+						// exist? remove!
+						if ($(`#${args['id']}SettingsBox`).length > 0) {
+							$(`#${args['id']}SettingsBox`).fadeToggle('fast', function () {
+								$(this).remove();
+							});
+						}
+
+						// create a new one
+						else {
+							HTML.SettingsBox(args['id']);
+						}
+					});
+				}
+			}
+
+			if (args['popout']) {
+				$(`#${args['id']}`).on('click', `#${args['id']}-popout`, function () {
+					HTML.PopOutBox(args['id']);
+				});
+
+				// was this box popped out in the previous session?
+				HTML.Popout?.queueRestore(args['id']);
+			}
+
+			if (args['resize']) {
+				HTML.Resizeable(args['id'], args['keepRatio']);
+			}
+
+			if (args['minimize']) {
+				HTML.MinimizeBox(div);
+			}
+
+			if (args['custom_buttons']) {
+				if (typeof args.custom_buttons === "object") {
+					for (const button of args.custom_buttons) {
+						$('#'+args['id']).on('click', `#${args['id']}${button.class}`, function () {
+							HTML.CustomBox(args.id,button.class);
+						});
+					}
+				}
+			}
+
+			div.fadeToggle('fast');
+
+			// Stop propagation of key event out of inputs in this box to FOE
+			$(`#${args['id']}`).on('keydown keyup', (e) => {
+				e.stopPropagation();
+			});
+
+			// Brings the clicked window to the front (bound once, not once per box)
+			if (!HTML.bringToFrontBound) {
+				HTML.bringToFrontBound = true;
+
+				$('body').on('click', '.window-box', function () {
+					HTML.BringToFront($(this));
+				});
+			}
+
+			return true;
+		});
+	},
+
+
+	/**
+	 * Click to minimise the box
+	 *
+	 * @param div
+	 */
+	MinimizeBox: (div) => {
+		let btn = $(div).find('.window-minimize');
+
+		$(btn).bind('click', function () {
+			let box = $(this).closest('.window-box'),
+				open = box.hasClass('open');
+
+			if (open === true) {
+				box.removeClass('open');
+				box.addClass('closed');
+				box.find('.window-body').css("visibility", "hidden");
+			}
+			else {
+				box.removeClass('closed');
+				box.addClass('open');
+				box.find('.window-body').css("visibility", "visible");
+			}
+		});
+	},
+
+
+	Minimize: () => {
+		$('body').find('#menu_box').removeClass('open');
+		$('body').find('#menu_box').addClass('closed');
+		$('#menu_box').find('.window-body').css("visibility", "hidden");
+	},
+
+
+	Maximize: () => {
+		$('body').find("#menu_box").removeClass('closed');
+		$('body').find("#menu_box").addClass('open');
+		$('#menu_box').find('.window-body').css("visibility", "visible");
+	},
+
+
+	/**
+	 * Handle minimizing helper during battle
+	 */
+	MinimizeBeforeBattle: () => {
+		let HideHelperDuringBattle = FH.Storage.getItem('HideHelperDuringBattle');
+		let MenuSetting = FH.Storage.getItem('SelectedMenu');
+
+		if (HideHelperDuringBattle === 'true' && MenuSetting === 'Box' && $('body').find("#menu_box").hasClass('open')) {
+			HTML.Minimize();
+			HTML.boxWasMinimizedForBattle = true;
+		}
+	},
+
+
+	MaximizeAfterBattle: () => {
+		let MenuSetting = FH.Storage.getItem('SelectedMenu');
+		if (MenuSetting == 'Box' && HTML.boxWasMinimizedForBattle) {
+			HTML.Maximize();
+			HTML.boxWasMinimizedForBattle = false;
+		}
+	},
+
+
+	/**
+	 * Makes an HTML BOX Dragable
+	 *
+	 * @param el
+	 * @param save
+	 */
+	DragBox: (el, save = true) => {
+
+		document.getElementById(el.id + "Header").removeEventListener("pointerdown", dragMouseDown);
+
+		let xStartM=0, yStartM=0, xStartEl=0, yStartEl=0;			
+
+		let id = el.id;
+
+		if (document.getElementById(el.id + "Header")) {
+			document.getElementById(el.id + "Header").onpointerdown = dragMouseDown;
+		} else {
+			el.onpointerdown = dragMouseDown;
+		}
+
+		function dragMouseDown(e) {
+			e = e || window.event;
+			e.preventDefault();
+
+			xStartM = e.clientX;
+			yStartM = e.clientY;
+			xStartEl = el.offsetLeft;
+			yStartEl = el.offsetTop;
+
+			document.onpointerup = closeDragElement;
+			document.onpointermove = elementDrag;
+		}
+
+		function elementDrag(e) {
+			e = e || window.event;
+			e.preventDefault();
+
+			let cords = mouseActions.calcCoords([(xStartEl - xStartM + e.clientX), yStartEl - yStartM + e.clientY], "Center");
+			//let cords = mouseActions.calcCoords([e.clientX, e.clientY], "Center");
+
+			$(el).css({"--x":cords[0]+"px","--y":cords[1]+"px"})
+
+			if (save === true) {
+				FH.Storage.setItem(id + 'Cords', JSON.stringify(cords));
+			}
+		}
+
+		function closeDragElement() {
+			document.onpointerup = null;
+			document.onpointermove = null;
+
+			// is there a callback function after drag&drop
+			HTML.callCustomFunction(id);
+		}
+	},
+
+
+	/**
+	 * Box can be resized
+	 *
+	 * @param id
+	 * @param keepRatio
+	 * @constructor
+	 */
+	Resizeable: (id, keepRatio) => {
+		let box = $('#' + id),
+			grip = $('<div />').addClass('window-grippy'),
+			sizeLS = FH.Storage.getItem(id + 'Size');
+
+		// Size was defined, set
+		if (sizeLS !== null) {
+			let s = sizeLS.split('|');
+
+			// Does the box fit into the Viewport in terms of height?
+			// No, height is set automatically, width taken over
+			if ($(window).height() - s[1] < 20) {
+				box.width(s[0]);
+			}
+			// ja, gespeicherte Daten sezten
+			else {
+				box.width(s[0]).height(s[1]);
+			}
+		}
+		else {
+			setTimeout(()=>{
+				box.width(box.width()).height(box.height());
+			}, 800);
+		}
+
+		box.append(grip);
+
+		let options = {
+			handles: {
+				ne: '.window-grippy',
+				se: '.window-grippy',
+				sw: '.window-grippy',
+				nw: '.window-grippy'
+			},
+			minHeight: 100,
+			minWidth: 220,
+			stop: (e, $el) => {
+				let w = $el.element.width();
+				let h = $el.element.height();
+				let t = $el.element.offset().top;
+				let l = $el.element.offset().left;
+				if (window.innerHeight<h+t) {
+					let h= window.innerHeight-t-5;
+					$el.element.height(h);
+				}
+				if (window.innerWidth<l+w) {
+					let w= window.innerWidth-l-5;
+					$el.element.width(w);
+				}
+				
+				let size = w + '|' + h;
+
+				FH.Storage.setItem(id + 'Size', size);
+			}
+		};
+
+		// Except the "menu Box"
+		if(id === 'menu_box')
+		{
+			options['minWidth'] = 55;
+			options['minHeight'] = 77;
+		}
+
+		// keep aspect ratio
+		if (keepRatio) {
+			options['aspectRatio'] = box.width() + ' / ' + box.height();
+
+			box.resizable(options);
+		}
+
+		// default
+		else {
+			box.resizable(options);
+		}
+	},
+
+
+	SettingsBox: (id) => {
+
+		let box = $('<div />').attr({
+			id: `${id}SettingsBox`,
+			class: 'settingsbox-wrapper'
+		});
+
+		$(`#${id}`).append(box);
+
+		setTimeout(() => {
+			HTML.callCustomFunction(id + 'Settings');
+		}, 100);
+	},
+
+
+	PopOutBox: (id) => {
+		// a module can take over completely by registering HTML.customFunctions[id + 'PopOut']
+		if (typeof HTML.customFunctions[id + 'PopOut'] === 'function') {
+			HTML.callCustomFunction(id + 'PopOut');
+			return;
+		}
+
+		HTML.Popout.open(id);
+	},
+
+
+	CustomBox: (id,cls) => {
+		setTimeout(() => {
+			HTML.callCustomFunction(id + cls);
+		}, 100);
+	},
+
+
+	/**
+	 * A second click on the menu icon closes any open box
+	 *
+	 * @param cssid
+	 * @returns {boolean}
+	 */
+	CloseOpenBox: (cssid) => {
+
+		// dock a popped out box first, so it is removed from the game DOM as usual
+		if (HTML.Popout?.isPopped(cssid)) HTML.Popout.close(cssid);
+
+		let box = $('#' + cssid);
+
+		if (box.length > 0) {
+			$(box).fadeToggle('fast', function () {
+				$(this).remove();
+			});
+		}
+
+		return false;
+	},
+
+
+	/**
+	 * Bindet auf Wunsch eine weitere CSS eines Modules ein
+	 * @param modul
+	 */
+	AddCssFile: (modul) => {
+		if ($('#' + modul + '-css').length > 0) {
+			return;
+		}
+
+		let url = FH.extUrl + 'js/web/' + modul + '/',
+			cssUrl = url + 'css/' + modul + '.css?v=' + FH.BaseData.extVersion;
+
+		let css = $('<link />')
+			.attr('href', cssUrl)
+			.attr('id', modul + '-css')
+			.attr('rel', 'stylesheet');
+
+		$('head').append(css);
+
+		HTML.Popout?.syncCssAll();
+	},
+
+
+	ChangeSkinCssFile: (filepath) => {
+		let cssUrl = FH.extUrl + 'css/' + filepath + '.css?v=' + FH.BaseData.extVersion;
+
+		let existing = $('link[rel="stylesheet"]').filter(function () {
+			return /\/css\/(themes\/[a-z]+|variables)\.css(\?|$)/i.test(this.href);
+		});
+
+		if (existing.length) {
+			existing.first().attr({id: 'hammerskin', href: cssUrl});
+			existing.slice(1).remove();
+		} else {
+			$('<link />').attr({id: 'hammerskin', href: cssUrl, rel: 'stylesheet'}).appendTo('head');
+		}
+
+		HTML.Popout?.syncCssAll();
+	},
+
+
+	/**
+	 * Formatiert Zahlen oder gibt = 0 einen "-" aus
+	 *
+	 * @param number
+	 * @returns {*}
+	 */
+	Format: (number) => {
+		if (number === 0) {
+			return '-';
+		} else {
+			if (typeof number !== 'number' && isNaN(Number(number))) return "" + number;
+			return Number(number).toLocaleString(FH.t('Local'));
+		}
+	},
+
+
+	/**
+	 * Formatiert Zahlen oder gibt = 0 einen "-" aus
+	 *
+	 * @param number
+	 * @returns {*}
+	 */
+	FormatNumberShort: (number,replaceZero=true,language='Local') => {
+		if (number === 0 && replaceZero) {
+			return '-';
+		} else {
+			return Intl.NumberFormat(FH.t(language), {
+				notation: "compact",
+				maximumFractionDigits: 1
+			}).format(Number(number));
+		}
+	},
+
+	/**
+	 * Replaces " with &quot;
+	 *
+	 * @param string
+	 * @returns {*}
+	 */
+	Tooltip: (string) => {
+		return string.replace(/"/g, "&quot;")
+	},
+
+	/**
+	* Returns strong class for formating mopppel date
+	*
+	* @param Value
+	* @param MinValue
+	* @param MaxValue
+	* @param Color1
+	* @param Color2
+	*/
+	GetColorGradient: (Value, MinValue, MaxValue, Color1, Color2) => {
+		let Factor2 = (Value - MinValue) / (MaxValue - MinValue);
+		Factor2 = Math.max(Factor2, 0);
+		Factor2 = Math.min(Factor2, 1);
+
+		let Factor1 = 1 - Factor2;
+
+		let Color1Int = parseInt(Color1, 16);
+		let Color2Int = parseInt(Color2, 16);
+
+		let Rgb1 = [Math.floor(Color1Int / 256 / 256), Math.floor(Color1Int / 256) % 256, Color1Int % 256];
+		let Rgb2 = [Math.floor(Color2Int / 256 / 256), Math.floor(Color2Int / 256) % 256, Color2Int % 256];
+
+		let RgbRet = [];
+		for (let i = 0; i < 3; i++) {
+			RgbRet[i] = Math.round(Rgb1[i] * Factor1 + Rgb2[i] * Factor2);
+		}
+
+		let ColorRet = RgbRet[0] * 256 * 256 + RgbRet[1] * 256 + RgbRet[2];
+
+		let Ret = ColorRet.toString(16);
+		while (Ret.length < 6) {
+			Ret = '0' + Ret;
+		}
+		return Ret;
+	},
+
+
+	BringToFront: ($this) => {
+		// a popped out box is alone in its window and never competes for z-index
+		if ($this.hasClass('popped-out')) return;
+
+		$('.window-box').not('.popped-out').removeClass('on-top');
+
+		$this.addClass('on-top');
+	},
+
+
+	Dropdown: () => {
+
+		for (const option of document.querySelectorAll(".custom-option")) {
+			option.addEventListener('click', function () {
+				if (!this.classList.contains('selected')) {
+					let $this = $(this),
+						txt = $this.text();
+
+					$this.parent().find('.custom-option.selected').removeClass('selected');
+					$this.addClass('selected');
+
+					setTimeout(() => {
+						$this.closest('.custom-select-wrapper').find('.trigger').text(txt);
+					}, 150);
+				}
+			})
+		}
+
+		for (const dropdown of document.querySelectorAll(".custom-select-wrapper")) {
+			dropdown.addEventListener('click', function () {
+				this.querySelector('.custom-select').classList.toggle('dd-open');
+			})
+		}
+
+		window.addEventListener('click', function (e) {
+			for (const select of document.querySelectorAll('.custom-select')) {
+				if (!select.contains(e.target)) {
+					select.classList.remove('dd-open');
+				}
+			}
+		});
+	},
+
+	EnterFullscreen: () => {
+
+	},
+
+
+	LeaveFullscreen: () => {
+
+	},
+
+
+	escapeHtml: (text)=> {
+		return text
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&#039;");
+	},
+
+
+	ShowToastMsg: (d) => {
+
+		if (!Settings.GetSetting('ShowNotifications') && !d['show']) return;
+
+		$.toast({
+			heading: d['head'],
+			text: d['text'],
+			icon: d['type'],
+			hideAfter: d['hideAfter'],
+			allowToastClose:  d['allowToastClose'],
+			position: Settings.GetSetting('NotificationsPosition', true),
+			extraClass: FH.Storage.getItem('SelectedMenu') || 'RightBar',
+			stack: FH.Storage.getItem('NotificationStack') || 4
+		});
+	},
+
+
+	/**
+	 * Delegated event handlers must not be bound to body/document, otherwise they
+	 * stop firing as soon as the box is moved into a pop-out window.
+	 *
+	 * @param id      box id
+	 * @param events  e.g. 'click'
+	 * @param selector
+	 * @param handler
+	 */
+	on: (id, events, selector, handler) => {
+		return $(`#${id}Body`).off(events, selector).on(events, selector, handler);
+	},
+
+
+	/**
+	 * Is the box currently in the DOM? (game window or pop-out window)
+	 *
+	 * @param id
+	 * @returns {boolean}
+	 */
+	isOpen: (id) => {
+		return document.getElementById(id) !== null;
+	},
+
+
+	/**
+	 * Container for bootstrap tooltips ($.tooltip({container: ...})) of an element,
+	 * which may live in the game window or in a pop-out window.
+	 *
+	 * @param el DOM element or jQuery object
+	 */
+	tooltipHost: (el) => {
+		let node = (el && el.jquery) ? el[0] : el,
+			doc = (node && node.ownerDocument) ? node.ownerDocument : document;
+
+		if (doc !== document) return doc.body;
+
+		return document.getElementById('game_body') ? '#game_body' : 'body';
+	},
+
+
+	/**
+	 * Removes leftover bootstrap tooltips in the game window and in all pop-outs
+	 */
+	clearTooltips: () => {
+		$('#game_body > .tooltip').remove();
+
+		for (const doc of (HTML.Popout ? HTML.Popout.documents() : [])) {
+			$(doc.body).children('.tooltip').remove();
+		}
+	},
+
+
+	ExportTable: (Table, Format, FileName, VisibleOnly = false) => {
+		if (!Table || Table.length === 0) return;
+
+		const IsHidden = (element) => {
+			let view = element.ownerDocument ? element.ownerDocument.defaultView : null;
+			return view ? view.getComputedStyle(element).display === 'none' : false;
+		};
+
+		$(Table).each(function () {
+			let ColumnNames = [];
+			let index = 0;
+			let findBy = "th"
+			if ($(Table).find('.exportheader th').length > 0){
+				findBy = '.exportheader th';
+			}
+			
+			$(Table).find(findBy).each(function () {
+				if (VisibleOnly ? IsHidden(this) : $(this)[0].classList.contains("buildingvalue")){
+					index++;
+					return;
+				}
+				let ColumnCount = $(this).attr('colspan');
+				if (ColumnCount) {
+					ColumnCount = ColumnCount - 0;
+				}
+				else {
+					ColumnCount = 1;
+				}
+
+				if (ColumnCount === 1) {
+					ColumnNames[index] = $(this).data('export')
+					index++;
+				}
+				else {
+					for (let i = 0; i < ColumnCount; i++) {
+						ColumnNames[index] = $(this).data('export' + (i + 1));
+						index++;
+					}
+				}
+			});
+
+			let DataRows = [];
+			$(Table).find('tr').each(function () {
+				if (VisibleOnly && IsHidden(this)) return;
+
+				let CurrentRow = {};
+				let ColumnID = 0;
+				$(this).find('td').each(function () {
+					if (ColumnNames[ColumnID]) { //skip if no columnname set
+						let Key = ColumnNames[ColumnID];
+						let Value;
+						if ($(this).attr('exportvalue')) {
+							Value = $(this).attr('exportvalue');
+							Value = HTML.ParseFloatNonLocalIfPossible(Value);
+						}
+						else if ($(this).attr('data-number')) {
+							Value = $(this).attr('data-number');
+							Value = HTML.ParseFloatNonLocalIfPossible(Value);
+						}
+						else {
+							Value = $(this).text();
+							if (Value === '-') Value = '0';
+							Value = HTML.ParseFloatLocalIfPossible(Value);
+						}
+						
+						CurrentRow[Key] = Value;
+					}
+
+					let ColumnCount = $(this).attr('colspan');
+					if (ColumnCount) {
+						ColumnID += ColumnCount;
+					}
+					else {
+						ColumnID += 1;
+					}
+					ColumnCount;
+				});
+
+				if(Object.keys(CurrentRow).length > 0) DataRows.push(CurrentRow); //Dont push empty rows
+			});
+
+			let FileContent;
+			if (Format === 'json') {
+				FileContent = JSON.stringify(DataRows);
+			}
+			else if (Format === 'csv') {
+				let Rows = [];
+
+				let ValidColumnNames = ColumnNames.filter(function (a) { return a !== undefined });
+				Rows.push(ValidColumnNames.join(';'));
+
+				for (let i = 0; i < DataRows.length; i++) {
+					let DataRow = DataRows[i];
+					let CurrentCells = [];
+
+					for (let j = 0; j < ValidColumnNames.length; j++) {
+						let CurrentCell = DataRow[ValidColumnNames[j]];
+						if (CurrentCell !== undefined) {
+							if ($.isNumeric(CurrentCell)) {
+								CurrentCells.push(Number(CurrentCell).toLocaleString(FH.t('Local'),{useGrouping:false}));
+							}
+							else {
+								CurrentCells.push(CurrentCell);
+							}
+						}
+						else {
+							CurrentCells.push('');
+						}
+					}
+					Rows.push(CurrentCells.join(';'));
+				}
+				FileContent = Rows.join('\r\n');
+			}
+			else { //Invalid format
+				return;
+			}
+
+			// with UTF-8 BOM
+			let BlobData = new Blob(["\uFEFF" + FileContent], { type: "application/octet-binary;charset=ANSI" });
+			FH.Main.ExportFile(BlobData, FileName + '-' + moment().format('YYYY-MM-DD') + '.' + Format);
+		});
+	},
+
+
+	FilterTable: (selector) => {
+		$(selector).on('click', (e) => {e.stopPropagation()})
+		$(selector).on('keyup', function (e) {
+			let filter = $(this).val().toLowerCase()
+			let table = $(this).parents("table")
+			if (filter.length >= 2) {
+				$("tbody tr", table).hide()
+				$("tbody tr", table).filter(function() {
+					let foundText = ($(this).text().toLowerCase().indexOf(filter) > -1)
+					if (foundText)
+						$(this).show()
+				});
+			}
+			else {
+				$("tbody tr", table).show()
+			}
+		});
+	},
+
+
+	ParseFloatLocalIfPossible: (NumberString) => {
+		if (HTML.IsReversedFloatFormat === undefined) { //FloatFormat bestimmen, wenn noch unbekannt
+			let ExampleNumberString = Number(1.2).toLocaleString(FH.t('Local'))
+			if (ExampleNumberString.charAt(1) === ',') {
+				HTML.IsReversedFloatFormat = true;
+			}
+			else {
+				HTML.IsReversedFloatFormat = false;
+			}
+		}
+
+		let Ret = NumberString;
+		if (HTML.IsReversedFloatFormat) {
+			Ret = Ret.replace(/\./g, "") //1000er Trennzeichen entfernen
+			Ret = Ret.replace(/,/g, ".") //Komma ersetzen
+		}
+		else {
+			Ret = Ret.replace(/,/g, "") //1000er Trennzeichen entfernen
+		}
+
+		let RetNumber = Number(Ret);
+		if (isNaN(RetNumber)) {
+			return NumberString;
+		}
+		else {
+			return RetNumber;
+		}
+	},
+
+
+	ParseFloatNonLocalIfPossible: (NumberString) => {
+		let Ret = Number(NumberString);
+		if (isNaN(Ret)) {
+			return NumberString;
+		}
+		else {
+			return Ret;
+		}
+	},
+};
+FH.helper = helper;
+FH.HTML = HTML;
+}

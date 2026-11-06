@@ -1,0 +1,103 @@
+<!--
+***************************************************************************************
+Copyright (C) 2026 Forge Hammer - All Rights Reserved
+See LICENSE.md for full license details.
+***************************************************************************************
+-->
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<link rel="icon" type="image/x-icon" href="../images/app48.png">
+	<title>Help - Forge Hammer</title>
+	<link href="../css/pages.css" rel="stylesheet">
+</head>
+
+<body class="fullpage">
+	<section>
+		<header>
+			<img src="../images/app128.png" />
+			<h1>Forge Hammer</h1>
+			Free browser addon for Forge of Empires<br />
+			<small><i>maintained by <b>outoftheline</b> and <b>Beelzebob666</b></i></small>
+		</header>
+		<h2>Help, I need information!</h2>
+		<p>We will extend this page as we go and added a <a
+				href="https://github.com/outoftheline/forge-hammer/wiki" target="_blank">wiki on GitHub</a>
+			which we'll work on when we find the time. If you want to, you can contribute to the wiki! <br /> Many thanks to Amber for adding documentation to the wiki already!</p>
+		<p>You can also ask questions on <a href="https://discord.gg/M32xurRsQ9">Discord</a></p>
+		<h3>Click on a menu item to open the wiki page</h3>
+		
+		<div class="setting">
+			<a href="https://github.com/outoftheline/forge-hammer/wiki/Alerts" target="_blank" id="setting-alerts-Btn" class="hud-btn"><span></span><span>Notifications</span></a>
+			<a href="https://github.com/outoftheline/forge-hammer/wiki/Building-Efficiency-Rating" id="setting-productionsRating-Btn" class="hud-btn"><span></span><span>Building Efficiency Rating</span></a>
+			<a href="https://github.com/outoftheline/forge-hammer/wiki/Allies" target="_blank" id="setting-allies-Btn" class="hud-btn"><span></span><span>Allies Overview</span></a>
+			<a href="https://github.com/outoftheline/forge-hammer/wiki/Castle-System-Tracker" target="_blank" id="setting-castle-Btn" class="hud-btn"><span></span><span>Castle System</span></a>
+			<a href="https://github.com/outoftheline/forge-hammer/wiki/Discord-Webhooks-&-GBG-Alarms" target="_blank" id="setting-discord-Btn" class="hud-btn"><span></span><span>Discord Webhooks</span></a>
+			<a href="https://github.com/outoftheline/forge-hammer/wiki/GE-Indicator-&-Statistics" target="_blank" id="setting-gexStat-Btn" class="hud-btn"><span></span><span>GE Results</span></a>
+			<a href="https://github.com/outoftheline/forge-hammer/wiki/Incident-Locator" target="_blank" id="setting-hiddenRewards-Btn" class="hud-btn"><span></span><span>Incidents</span></a>
+			<a href="https://github.com/outoftheline/forge-hammer/wiki/Motivate-&-Polish-Tracker" target="_blank" id="setting-moppelHelper-Btn" class="hud-btn"><span></span><span>Motivate/Polish Tracker</span></a>
+			<a href="https://github.com/outoftheline/forge-hammer/wiki/Profile" target="_blank" id="setting-playerProfile-Btn" class="hud-btn"><span></span><span>Player Profile</span></a>
+			<a href="https://github.com/outoftheline/forge-hammer/wiki/Recurring-Quests" target="_blank" id="setting-recurringQuests-Btn" class="hud-btn"><span></span><span>Recurring Quests</span></a>
+			<a href="https://github.com/outoftheline/forge-hammer/wiki/GB-Calculator(s)" target="_blank" id="setting-partCalc-Btn" class="hud-btn"><span></span><span>GB Calculator</span></a>
+			<!--
+			<a href="#" id="setting-productions-Btn" class="hud-btn"><span></span><span>Production Overview</span></a>
+			<a href="#" id="setting-cityMap-Btn" class="hud-btn"><span></span><span>Town Overview</span></a>
+			<a href="#" id="setting-gildFight-Btn" class="hud-btn"><span></span><span>GBG</span></a>
+			<a href="#" id="setting-guildMemberstat-Btn" class="hud-btn"><span></span><span>Guild Member Overview</span></a>
+			<a href="#" id="setting-shopAssist-Btn" class="hud-btn"><span></span><span>Shop Assistant</span></a>
+			<a href="#" id="setting-stats-Btn" class="hud-btn"><span></span><span>Statistics</span></a>
+			<a href="#" id="setting-greatBuildings-Btn" class="hud-btn"><span></span><span>GB Investment</span></a>
+			<a href="#" id="setting-music-Btn" class="hud-btn"><span></span><span>Background Music</span></a>
+			<a href="#" id="setting-technologies-Btn" class="hud-btn"><span></span><span>Technology Tree</span></a>
+			<a href="#" id="setting-market-Btn" class="hud-btn"><span></span><span>Market Filter</span></a>
+			<a href="#" id="setting-blueGalaxy-Btn" class="hud-btn"><span></span><span>Blue Galaxy Helper</span></a>
+			<a href="#" id="setting-findGB-Btn" class="hud-btn"><span></span><span>GB Tracker</span></a>
+			<a href="#" id="setting-negotiation-Btn" class="hud-btn"><span></span><span>Negotiation Helper</span></a>
+			<a href="#" id="setting-minigame_aztecs-Btn" class="hud-btn"><span></span><span>Aztec Helper</span></a>
+			<a href="#" id="setting-kits-Btn" class="hud-btn"><span></span><span>Sets and Chains</span></a>
+			<a href="#" id="setting-unit-Btn" class="hud-btn"><span></span><span>Military Units</span></a>
+			<a href="#" id="setting-fpCollector-Btn" class="hud-btn"><span></span><span>FP Collector</span></a>
+			<a href="#" id="setting-outpost-Btn" class="hud-btn"><span></span><span>Settlements Overview</span></a>
+			<a href="#" id="setting-notice-Btn" class="hud-btn"><span></span><span>Notes</span></a>
+			<a href="#" id="setting-investment-Btn" class="hud-btn"><span></span><span>FP Investments</span></a>
+			<a href="#" id="setting-compare_friends_threads-Btn" class="hud-btn"><span></span><span>Compare Friends with Threads</span></a>
+			<a href="#" id="setting-infobox-Btn" class="hud-btn"><span></span><span>Info Box</span></a>-->
+		</div>
+
+		<hr />
+
+		<h2>I found a bug!</h2>
+		<p>Please report issues <a
+				href="https://github.com/outoftheline/forge-hammer/issues" target="_blank">on GitHub</a> or <a href="https://discord.gg/M32xurRsQ9">on Discord</a>. Thank you!</p>
+
+		<hr />
+
+		<h2>Data</h2>
+		<p>This addon is best enjoyed if you do not clear your browser data regularly, as it saves game
+			data locally, so on your device only, and has a lot of settings that would be reset everytime
+			you do
+			so.<br />That being said: Clearing only your <b>cache</b> is fine. Data is stored in
+			a local database (IndexedDB) and localStorage, not in the cache.</p>
+		<p>You can also save your data to your computer before deleting any browser data in <img class="icon"
+				src="../images/menu/settings.png" /> <b>Settings</b> and reimport it afterwards!</p>
+		<p>No data is sent to external websites.</p>
+
+		<hr />
+
+		<h2><img class="icon" src="../images/menu/alerts.png" /> I don't receive any notifications, how can I
+			fix that?</h2>
+
+		<p>Create an entry with a title and a date in the <img class="icon" src="../images/menu/alerts.png" />
+			<b>Alerts
+				module</b> and hit the Preview button. <br />
+			If nothing happens, notifications are probably not allowed in your OS (Windows/Mac etc) or in
+			your browser.
+			Check those settings.
+		</p>
+
+	</section>
+</body>
+
+</html>

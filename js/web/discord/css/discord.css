@@ -1,0 +1,55 @@
+#Discord {
+    width: 750px;
+    top: calc(30vh);
+    left: calc(50vw - 375px);
+}
+
+#Discord .window-body {
+	overflow-y: auto;
+}
+
+.discordForm form {
+	display: flex;
+	gap: 5px;
+	flex-wrap: wrap;
+	justify-content: end;
+	padding: 5px;
+}
+
+.discordForm b {
+	width: 155px;
+}
+
+.discordForm #url-list {
+	padding: 0;
+	margin: 0;
+	list-style: none;
+	display: inline-block;
+	width: calc(100% - 170px);
+}
+
+.discordForm #url-list {
+	padding: 0;
+	margin: 0;
+	list-style: none;
+	display: inline-block;
+	width: calc(100% - 160px);
+}
+
+.discordForm #url-list li {
+	padding: 0 2px;
+	margin: 0 3px;
+	display: inline-block;
+	border-radius: 2px;
+}
+
+.discordForm #url-list li.selected {
+	font-weight: bold;
+	color: var(--text-highlight);
+	background-color: var(--black-50);
+}
+
+.discordForm textarea, .discordForm input {
+	width: calc(100% - 160px);
+	resize: vertical;
+}

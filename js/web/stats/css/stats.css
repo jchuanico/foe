@@ -1,0 +1,343 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Licensed under AGPL - see LICENSE.md for details.
+ */
+
+#stats {
+	top: calc(50% - 375px);
+	left: calc(50% - 550px);
+}
+
+#statsBody {
+	width: 1100px;
+	max-height: 800px;
+	overflow: hidden;
+	position: relative;
+}
+
+#stats .options {
+	display: flex;
+	flex-direction: row;
+	justify-content: space-between;
+	align-items: center;
+	background-color: var(--bg-dark);
+	height: 50px;
+	border-bottom: 2px solid var(--border-tab);
+}
+
+#stats .options-2 .btn-slim {
+	margin: 2px 0;
+}
+
+#stats .option-era-dropdown {
+	width: 170px;
+}
+
+#stats .option-era-dropdown .dropdown {
+	width: 100%;
+}
+
+#stats .option-era-dropdown .dropdown ul li {
+	padding: 0.1rem;
+}
+
+#stats .option-era-dropdown .dropdown ul {
+	max-height: 560px;
+	width: 200px;
+	overflow: auto;
+}
+
+#stats .tabs  {
+	align-self: flex-end;
+	padding: 0 5px;
+}
+
+#stats .option-chart-type-wrap {
+	width: 170px;
+	font-size: 85%;
+}
+
+#stats .option-chart-type-wrap span {
+	padding: 2px;
+}
+
+#stats .option-chart-type-wrap span.active {
+	color: var(--text-highlight);
+}
+
+#stats .option-source-wrap {
+	display: flex;
+	flex-wrap: wrap;
+	flex-direction: column;
+	align-items: baseline;
+	align-content: baseline;
+}
+
+#stats .datepicker {
+	padding-right: 10px;
+}
+
+#stats .hidden {
+	visibility: hidden;
+}
+
+#stats .sprite-50 {
+	width: 30px;
+	margin: -6px 0;
+}
+
+#stats .tabs .horizontal {
+	border-bottom: none;
+}
+
+#stats .tabs ul.horizontal li {
+	line-height: 32px;
+}
+
+#stats .tabs ul.horizontal li a span {
+	width: 27px;
+}
+
+#stats .window-body .tabs ul.horizontal li {
+	margin-right: 2px;
+}
+
+#stats .tabs ul li a span {
+	background-size: contain;
+	background-repeat: no-repeat;
+	background-position: center;
+}
+#stats .tabs ul li.statsTreasurePlayerD a span {
+	background-image: url(../../x_img/resources.png);
+}
+#stats .tabs ul li.statsTreasureClanD a span {
+	background-image: url(../../x_img/guildGoods.png);
+}
+#stats .tabs ul li.statsUnitsD a span {
+	background-image: url(../../x_img/units.png);
+}
+#stats .tabs ul li.statsRewards a span {
+	background-image: url(../../x_img/event.png);
+}
+#stats .tabs ul li.statsGBGPlayers a span {
+	background-image: url(../../x_img/gbg.png);
+}
+#stats .tabs ul li.diplomaticGifts a span {
+	background-image: url(../../x_img/diplomatic_gifts.png);
+}
+#stats .tabs ul li.spoilsOfWar a span {
+	background-image: url(../../x_img/spoils_of_war.png);
+}
+#stats .tabs ul li.guildExpedition a span {
+	background-image: url(../../x_img/ge.png);
+}
+#stats .tabs ul li.battlegrounds_conquest a span {
+	background-image: url(../../x_img/gbg-gray.png);
+}
+#stats .tabs ul li.__event a span {
+	background-image: url(../../x_img/event.png);
+}
+#stats .tabs ul li.hidden_reward a span {
+	background-image: url(../../x_img/incident.png);
+}
+#stats .tabs ul li.pvp_arena a span {
+	background-image: url(../../x_img/pvp_arena.png);
+}
+#stats .tabs ul li.guild_raids a span {
+	background-image: url(../../x_img/guild_raids.png);
+}
+#stats .tabs ul li.shards a span {
+	background-image: url(../../x_img/shards.png);
+}
+
+#LowStock .options {
+	border: 3px solid transparent;
+	height: 30px;
+	background-color: var(--bg-light);
+}
+
+#LowStock .selected {
+	border-color: var(--limegreen);
+}
+#LowStockID {
+	width: 300px;
+	height: 34px;
+	margin-left: 5px;
+}
+#LowStockValue {
+	height: 30px;
+	margin-left: 5px;
+	margin-right: 5px;
+	background-color: var(--bg-light);
+}
+#LowStockAddBtn {
+	height: 29px;
+    font-size: 18px;
+    margin-left: 5px;
+	font-weight: 900;
+}
+.LowStockRemBtn {
+	height: 20px;
+    font-size: 12px;
+    margin-left: 5px;
+	font-weight: 900;
+}
+.LShighlight {
+	background: var(--bg-light);
+    color: var(--text);
+}
+#LowStockAlarmsList img {
+    height: 25px;
+    background-color: var(--bg-light);
+}
+
+.stats-tooltip-title { /* date header / pie slice header */ }
+.stats-tooltip-swatch, .stats-legend-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.stats-tooltip-img { width: 30px; height: 30px; vertical-align: middle; }
+.stats-tooltip-value { /* pie percentage line */ }
+
+#statsTitle {
+	position: absolute;
+	top: 55px;
+	width: 100%;
+	text-align: center;
+	font-weight: bold;
+	font-size: 110%;
+}
+
+#statsWrapper {
+	background-color: var(--bg-chart);
+	height: 550px;
+}
+
+.chartTooltip {
+	background: var(--table-bg-darker);
+	color: var(--text);
+	backdrop-filter: blur(3px);
+	padding: 5px;
+    position: absolute;
+    pointer-events: none;
+}
+
+.stats-tooltip-table {
+	border-collapse: collapse;
+	white-space: nowrap;
+	font-size: 90%;
+}
+
+.stats-tooltip-table th {
+	text-align: left;
+	font-weight: normal;
+	opacity: 0.7;
+	border-bottom: 1px solid var(--black-50);
+}
+
+.stats-tooltip-table th, .stats-tooltip-table td {
+	padding: 1px 4px;
+}
+
+.stats-tooltip-table td:not(:first-child) {
+	font-variant-numeric: tabular-nums;
+}
+
+.stats-tooltip-basis {
+	font-size: 85%;
+	opacity: 0.8;
+}
+
+.chartTooltip li {
+	align-items: center;
+	gap: 5px;
+	flex-wrap: nowrap;
+}
+
+.chartTooltip .legend {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+}
+
+#statsLegendWrapper {
+	position: absolute;
+	bottom: 5px;
+	left: 5%;
+	margin: 0 auto;
+	width: 90%;
+	background: var(--table-bg-darker);
+	color: var(--text);
+	padding: 3px;
+	max-height: 55px;
+	overflow: auto;
+	box-sizing: border-box;
+}
+.stats-legend-item {
+	white-space: nowrap;
+	display: inline-block;
+	margin-right: 10px;
+	font-size: 90%;
+}
+.exportData {
+	position: absolute;
+	bottom: 4px;
+	right: 4px;
+}
+#StatsGBG .exportData {
+	top: 34px;
+	bottom: auto;
+}
+.stats-doughnut .exportData {
+	display: none;
+}
+
+.stats-legend-item.stats-legend-hidden .stats-legend-label {
+	text-decoration: line-through;
+	opacity: 0.7;
+}
+.chartLegend img, #statsTooltip img {
+	max-width: 22px;
+	max-height: 22px;
+}
+
+.StatsRewardFilter { 
+	display: none; 
+	position: sticky;
+	top: 0;
+}
+
+.StatsRewardFilter input { 
+	width: 100%;
+	box-sizing: border-box;
+}
+
+#statsBody.stats-doughnut #statsChart {
+	transform: translateX(-240px);
+}
+
+#statsBody.stats-doughnut #statsLegendWrapper {
+	left: unset;
+	bottom: unset;
+    top: 60px;
+    right: 5px;
+    width: 375px;
+    max-height: 536px;
+}
+
+#statsBody.stats-doughnut .stats-legend-item {
+	white-space: normal;
+	display: block;
+}
+
+#statsBody.stats-doughnut #statsTitle {
+    top: 202px;
+    left: 185px;
+    width: 250px;
+    height: 250px;
+    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    padding: 30px;
+    box-sizing: border-box;
+}
+#statsBody.stats-doughnut .StatsRewardFilter { display: block; }

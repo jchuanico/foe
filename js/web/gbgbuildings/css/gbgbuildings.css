@@ -1,0 +1,42 @@
+/*
+ * Copyright (C) 2026 FoE-Helper team - All Rights Reserved
+ * Copyright (C) 2026 Forge Hammer
+ * Licensed under AGPL - see LICENSE.md for details.
+*/
+
+#GBGBuildings {
+	width: 420px;
+	height: 400px;
+}
+#GBGBuildingsBody {
+	overflow-y: auto;
+}
+#GBGBuildingsBody th, #GBGBuildingsBody td {
+	text-align: center;
+}
+#GBGBuildingsBody th:first-child, #GBGBuildingsBody td:first-child {
+	text-align: left;
+}
+#GBGBuildingsBody .building {
+	width: 65px;
+}
+#GBGBuildingsBody .keep {
+	opacity: 40%;
+}
+#GBGBuildingsBody .highlight {
+	font-weight: 800;
+	color: var(--text-highlight);
+}
+#GBGBuildingsBody .breakline td {
+	border-top: 2px solid var(--text-highlight);
+}
+#GBGBuildingsBody .breakline td {
+	border-top: 2px solid var(--text-highlight);
+}
+#GBGBuildingsBody tr[data-value="80"] td {
+	background: var(--table-bg-success);
+}
+#GBGBuildingsBody tr[data-value="80"] td:nth-child(2) {
+	color: var(--success) !important;
+}
+

@@ -1,0 +1,295 @@
+[
+	{
+		"name": "ShowEventChest",
+		"callback": "ShowEventHelpers",
+		"status": true,
+		"group": "Auto",
+		"sort": 1
+	},
+	{
+		"name": "BlockCollectAll",
+		"status": false,
+		"group": "Auto",
+		"sort": 2
+	},
+	{
+		"name": "ShowReconstructionList",
+		"status": true,
+		"group": "Auto",
+		"sort": 4
+	},
+	{
+		"name": "AutoOpenCloseBox",
+		"status": false,
+		"group": "Auto",
+		"sort": 6
+	},
+	{
+		"name": "ShowScoutingTimes",
+		"status": true,
+		"cssClass": "spacer",
+		"group": "Auto",
+		"sort": 12
+	},
+	{
+		"name": "ShowMapTradeWarning",
+		"status": true,
+		"group": "Auto",
+		"sort": 13
+	},
+	{
+		"name": "ShowRougeUnitWarning",
+		"status": true,
+		"group": "Auto",
+		"sort": 10
+	},
+	{
+		"name": "ShowArmyAdvice",
+		"status": false,
+		"group": "Auto",
+		"button":"FH.BattleAssist.ShowArmyAdviceConfig()",
+		"sort": 24
+	},
+	{
+		"name": "ShowPotions",
+		"status": false,
+		"group": "Boxes",
+		"sort": 5
+	},
+	{
+		"name": "ShowPvPArena",
+		"status": true,
+		"group": "Auto",
+		"sort": 15
+	},
+	{
+		"name": "ShowGBGBuildings",
+		"status": false,
+		"cssClass": "spacer",
+		"group": "Auto",
+		"sort": 16
+	},
+	{
+		"name": "ShowGBGPlayerInfo",
+		"status": true,
+		"group": "Auto",
+		"sort": 18
+	},
+	{
+		"name": "ShowQIPlayerInfo",
+		"status": true,
+		"group": "Auto",
+		"sort": 21
+	},
+	{
+		"name": "ShowGuildTreasuryLogExport",
+		"status": true,
+		"group": "Auto",
+		"sort": 35
+	},
+	{
+		"name": "GexStockWarning",
+		"callback": "GexStockWarning",
+		"group": "Auto",
+		"sort": 40
+	},
+	{
+		"name": "CalcGBReminder",
+		"status": true,
+		"group": "Boxes",
+		"sort": 1
+	},
+	{
+		"name": "ShowPlayersMotivation",
+		"status": true,
+		"group": "Boxes",
+		"sort": 3
+	},
+	{
+		"name": "doubleFPtimeout",
+		"callback": "doubleFPtimeout",
+		"group": "Boxes",
+		"sort": 7
+	},
+	{
+		"name": "Auctions",
+		"status": false,
+		"group": "Boxes",
+		"button":"FH.Auction.BuildBody()",
+		"sort": 9
+	},
+	{
+		"name": "Show2kQuestMark",
+		"status": false,
+		"group": "Boxes",
+		"sort": 11
+	},
+	{
+		"name": "ShowGBGRewards",
+		"status": false,
+		"group": "Boxes",
+		"sort": 19
+	},
+	{
+		"name": "RepeatSelectBuilding",
+		"status": false,
+		"group": "Boxes",
+		"sort": 20
+	},
+	{
+		"name": "ResetBoxPositions",
+		"button": "Settings.ResetBoxCoords()",
+		"group": "Boxes",
+		"cssClass": "spacer",
+		"sort": 23
+	},
+	{
+		"name": "HideHelperDuringBattle",
+		"status": false,
+		"group": "Boxes",
+		"sort": 24
+	},
+
+	{
+		"name": "MenuContent",
+		"callback": "MenuContent",
+		"group": "Extension",
+		"sort": 1
+	},
+	{
+		"name": "MenuAppearance",
+		"callback": "MenuAppearanceSettings",
+		"group": "Extension",
+		"sort": 4
+	},
+	{
+		"name": "EnableSound",
+		"callback": "SoundEffects",
+		"status": false,
+		"group": "Extension",
+		"cssClass": "spacer",
+		"sort": 7
+	},
+	{
+		"name": "ModuleSounds",
+		"callback": "ModuleSounds",
+		"group": "Extension",
+		"sort": 8
+	},
+	{
+		"name": "RivalSound",
+		"status": true,
+		"group": "Extension",
+		"sort": 10
+	},
+	{
+		"name": "ShowBuildingsExpired",
+		"status": true,
+		"group": "Extension",
+		"button":"FH.Main.Inactives.showSettings()",
+		"cssClass": "spacer",
+		"sort": 12
+	},
+	{
+		"name": "ShowNotifications",
+		"status": true,
+		"group": "Extension",
+		"cssClass": "spacer",
+		"sort": 14
+	},
+	{
+		"name": "NotificationsPosition",
+		"callback": "NotificationView",
+		"group": "Extension",
+		"status": "bottom-right",
+		"sort": 16
+	},
+	{
+		"name": "NotificationsStack",
+		"callback": "NotificationStack",
+		"group": "Extension",
+		"sort": 18
+	},
+	{
+		"name": "Version",
+		"callback": "VersionInfo",
+		"group": "About",
+		"sort": 1
+	},
+	{
+		"name": "ChangeLanguage",
+		"callback": "LanguageDropdown",
+		"group": "About",
+		"sort": 10
+	},
+	{
+		"name": "DateTimeFormat",
+		"callback": "DateTimeFormats",
+		"group": "About",
+		"sort": 12
+	},
+	{
+		"name": "Skins",
+		"callback": "ChooseSkin",
+		"group": "About",
+		"sort": 15
+	},
+	{
+		"name": "Filters",
+		"callback": "GameFilters",
+		"group": "About",
+		"sort": 18
+	},
+	{
+		"name": "ShowLinks",
+		"status": true,
+		"callback": "SelectWebsite",
+		"cssClass": "spacer",
+		"group": "About",
+		"sort": 20
+	},
+	{
+		"name": "ExportSettings",
+		"callback": "ExportView",
+		"cssClass": "spacer",
+		"group": "About",
+		"sort": 25
+	},
+	{
+		"name": "LoadBeta2",
+		"callback": "LoadBeta",
+		"group": "About",
+		"sort": 27
+	},
+
+	{
+		"name": "ShowBlueGalaxyHelper",
+		"status": true,
+		"hidden": true
+	},
+	{
+		"name": "ShowAllyList",
+		"status": true,
+		"hidden": true
+	},
+	{
+		"name": "ShowInvestments",
+		"status": true,
+		"hidden": true
+	},
+	{
+		"name": "ShowOwnPartOnAllGBs",
+		"status": true,
+		"hidden": true
+	},
+	{
+		"name": "AutomaticNegotiation",
+		"status": true,
+		"hidden": true
+	},
+	{
+		"name": "ShowAztecHelper",
+		"status": true,
+		"hidden": true
+	}
+]
