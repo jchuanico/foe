@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Snipe Check</title>
+<meta name="description" content="Pick a screenshot of a Forge of Empires Great Building's Level Up tab and see which place to lock for the most FP profit.">
+<meta name="theme-color" content="#14203a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Snipe Check">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --night: #14203a;
+    --night-2: #1c2b4a;
+    --gold: #d4a72c;
+    --gold-soft: #f1dc9e;
+    --paper: #f2f4f7;
+    --panel: #ffffff;
+    --ink: #1b2433;
+    --muted: #5b6678;
+    --line: #d8dde6;
+    --good: #2f7d32;
+    --bad: #a5413b;
+    --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+    --body: "Barlow", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0f1729;
+      --panel: #16213a;
+      --ink: #e7ebf2;
+      --muted: #a3adbf;
+      --line: #27365a;
+      --good: #7cc47f;
+      --bad: #e0857e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 400 16px/1.5 var(--body); -webkit-font-smoothing: antialiased;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  :focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+  a { color: inherit; }
+  .wrap { width: min(560px, 100% - 32px); margin-inline: auto; }
+
+  header.top { background: var(--night); color: #fff; padding: calc(14px + env(safe-area-inset-top)) 0 18px; }
+  header.top .wrap { display: flex; align-items: center; gap: 10px; }
+  header.top h1 { font: 700 1.6rem/1 var(--display); margin: 0; }
+  header.top svg { width: 22px; height: 22px; flex: none; }
+  header.top .settings-btn { margin-left: auto; background: none; border: 1.5px solid rgba(255,255,255,.35); color: #fff; border-radius: 8px; padding: 6px 12px; font: 500 0.9rem var(--body); }
+
+  /* Answer panel: the main thing on screen */
+  .answer { background: var(--night); color: #fff; padding: 8px 0 28px; }
+  .answer .gb { color: var(--gold-soft); font-weight: 500; margin: 0 0 14px; min-height: 1.5em; }
+  .answer .big { font: 700 clamp(2.6rem, 13vw, 3.6rem)/1 var(--display); margin: 0; }
+  .answer .figures { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 18px; }
+  .answer .fig { background: var(--night-2); border-radius: 10px; padding: 12px 14px; }
+  .answer .fig .n { font: 700 1.9rem/1.05 var(--display); }
+  .answer .fig .l { color: #c6cfdf; font-size: 0.9rem; }
+  .answer .fig.copy { border: 0; text-align: left; color: inherit; font: inherit; cursor: pointer; width: 100%; }
+  .answer .fig.copy .l::after { content: ", tap to copy"; color: #8c99b3; }
+  .answer .fig .n.profit { color: #9fd8a2; }
+  .answer .note { color: #c6cfdf; margin: 14px 0 0; }
+  .answer .note.warn { color: var(--gold-soft); }
+  .shot { color: #c6cfdf; margin: 10px 0 0; padding-left: 1.3em; }
+  .shot li { margin-bottom: 6px; }
+  .shot li::marker { color: var(--gold); font-weight: 700; }
+  .shot strong { color: #fff; font-weight: 600; }
+
+  .pick { display: grid; gap: 10px; margin-top: 18px; }
+  .btn {
+    display: block; width: 100%; text-align: center; text-decoration: none; cursor: pointer;
+    font: 600 1.05rem/1 var(--body); padding: 16px 18px; border-radius: 10px; border: 0;
+  }
+  .btn-primary { background: var(--gold); color: var(--night); }
+  .btn-secondary { background: transparent; color: #fff; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.4); }
+  .btn:disabled { opacity: .6; cursor: progress; }
+  input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+  .progress { height: 6px; background: var(--night-2); border-radius: 3px; overflow: hidden; margin-top: 16px; }
+  .progress div { height: 100%; width: 0; background: var(--gold); transition: width .2s; }
+  @media (prefers-reduced-motion: reduce) { .progress div { transition: none; } }
+
+  main section { padding: 26px 0 6px; }
+  h2 { font: 700 1.4rem/1.1 var(--display); margin: 0 0 4px; }
+  .hint { color: var(--muted); font-size: 0.92rem; margin: 0 0 12px; }
+
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .fields .full { grid-column: 1 / -1; }
+  label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; }
+  input[type=number], input[type=text], select {
+    width: 100%; font: 500 1rem var(--body); color: var(--ink); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 10px; min-height: 44px;
+  }
+  input.missing { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; min-height: 44px; }
+  .seg button { flex: 1; border: 0; background: var(--panel); color: var(--ink); font: 500 1rem var(--body); }
+  .seg button[aria-pressed=true] { background: var(--night); color: #fff; }
+
+  table.places { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+  table.places th { text-align: right; font-weight: 500; color: var(--muted); font-size: 0.8rem; padding: 0 0 6px 6px; }
+  table.places th:first-child, table.places td:first-child { text-align: left; padding-left: 0; }
+  table.places td { text-align: right; padding: 8px 0 8px 6px; border-top: 1px solid var(--line); vertical-align: middle; }
+  table.places td.place { font: 700 1.3rem var(--display); width: 2.2em; }
+  table.places td.holder { width: 34%; }
+  table.places td.holder input { text-align: right; padding: 8px; min-height: 40px; }
+  table.places .who { display: block; font-size: 0.78rem; color: var(--muted); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 9.5em; margin-left: auto; }
+  table.places .st { display: block; font-size: 0.78rem; color: var(--muted); }
+  table.places tr.best td { background: color-mix(in srgb, var(--gold) 16%, transparent); }
+  .pos { color: var(--good); font-weight: 600; }
+  .neg { color: var(--bad); }
+  .owner-line { font-size: 0.9rem; color: var(--muted); margin-top: 10px; }
+  .owner-line button { background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; font: inherit; cursor: pointer; }
+
+  details { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 12px; }
+  summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+  .rewards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 10px; }
+  .rewards input { text-align: center; padding: 8px 4px; }
+  .rewards label { text-align: center; }
+
+  dialog { border: 0; border-radius: 14px; padding: 0; width: min(460px, 100% - 32px); color: var(--ink); background: var(--panel); }
+  dialog::backdrop { background: rgba(10, 16, 30, .6); }
+  dialog form { padding: 22px; display: grid; gap: 14px; }
+  dialog .row { display: flex; gap: 10px; justify-content: flex-end; }
+  dialog .row .btn { width: auto; padding: 12px 18px; }
+  dialog .btn-plain { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--line); }
+
+  footer { color: var(--muted); font-size: 0.85rem; padding: 30px 0 40px; }
+  footer p { margin: 0 0 8px; }
+  .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 8px; font-size: 0.95rem; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .toast.show { opacity: 1; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <svg viewBox="0 0 26 26" aria-hidden="true"><polygon points="6.5,1.7 19.5,1.7 26,13 19.5,24.3 6.5,24.3 0,13" fill="#d4a72c"/></svg>
+    <h1>Snipe Check</h1>
+    <button class="settings-btn" type="button" id="openSettings">Your bonuses</button>
+  </div>
+</header>
+
+<div class="answer" aria-live="polite">
+  <div class="wrap">
+    <p class="gb" id="gbLine"></p>
+
+    <div id="startView">
+      <p class="big">Which spot should you take?</p>
+      <p class="note">Take one screenshot in the game, then choose it here:</p>
+      <ol class="shot">
+        <li>Open the Great Building and go to its <strong>Level Up</strong> tab.</li>
+        <li>Scroll the list of players down until <strong>place 5</strong> shows, or the last place if fewer than five have paid.</li>
+        <li>Keep the FP bar at the top in view and take the screenshot.</li>
+      </ol>
+    </div>
+
+    <div id="readingView" hidden>
+      <p class="big" id="readingTitle">Reading screenshot</p>
+      <div class="progress" role="progressbar" aria-label="Reading progress" aria-valuemin="0" aria-valuemax="100"><div id="bar"></div></div>
+      <p class="note" id="readingNote">The first time takes a little longer while the text reader loads.</p>
+    </div>
+
+    <div id="resultView" hidden>
+      <p class="big" id="resultTitle"></p>
+      <div class="figures" id="resultFigures"></div>
+      <p class="note" id="resultNote"></p>
+    </div>
+
+    <div class="pick">
+      <label class="btn btn-primary" id="pickLabel" for="files">Choose screenshot</label>
+      <input type="file" id="files" accept="image/*">
+      <button class="btn btn-secondary" type="button" id="manualBtn">Type the numbers instead</button>
+    </div>
+  </div>
+</div>
+
+<main class="wrap" id="details" hidden>
+  <section aria-labelledby="gbTitle">
+    <h2 id="gbTitle">Great Building</h2>
+    <p class="hint">Check what was read and fix anything that looks wrong. Everything updates as you type.</p>
+    <div class="fields">
+      <div class="full">
+        <label for="gbSelect">Building</label>
+        <select id="gbSelect"></select>
+      </div>
+      <div>
+        <label for="level">Current level</label>
+        <input type="number" id="level" inputmode="numeric" min="0">
+      </div>
+      <div>
+        <label id="tierLabel">Tier</label>
+        <div class="seg" role="group" aria-labelledby="tierLabel">
+          <button type="button" data-tier="copper" aria-pressed="true">Copper</button>
+          <button type="button" data-tier="gold" aria-pressed="false">Gold</button>
+        </div>
+      </div>
+      <div>
+        <label for="current">FP in so far</label>
+        <input type="number" id="current" inputmode="numeric" min="0">
+      </div>
+      <div>
+        <label for="total">FP to level</label>
+        <input type="number" id="total" inputmode="numeric" min="0">
+      </div>
+      <div>
+        <label for="available">Your available FP</label>
+        <input type="number" id="available" inputmode="numeric" min="0" placeholder="Optional">
+      </div>
+      <div>
+        <label for="selfFp">Your FP already in</label>
+        <input type="number" id="selfFp" inputmode="numeric" min="0" placeholder="0">
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="placesTitle">
+    <h2 id="placesTitle">Places</h2>
+    <p class="hint">Holder FP is what the current player in each place has put in. Leave it blank if you don't know it, and use 0 for an empty place.</p>
+    <table class="places">
+      <thead><tr><th scope="col">#</th><th scope="col">Holder FP</th><th scope="col">Pays you</th><th scope="col">Lock cost</th><th scope="col">Profit</th></tr></thead>
+      <tbody id="placeRows"></tbody>
+    </table>
+    <p class="owner-line" id="ownerLine" hidden></p>
+
+    <details id="rewardsBox">
+      <summary>Rewards for this level</summary>
+      <p class="hint" id="rewardsHint">FP each place pays before your bonus. Filled in from Forge Hammer's reward table. To check, tap the chest next to a place in the game.</p>
+      <div class="rewards" id="rewardInputs"></div>
+    </details>
+  </section>
+</main>
+
+<footer class="wrap">
+  <p>Your screenshots are read on your phone and never uploaded.</p>
+  <p>To keep this handy, tap Share in Safari, then Add to Home Screen.</p>
+  <p>Lock costs use the same math as our <a href="../snipe/">Forge Hammer snipe box</a>. Rewards come from Forge Hammer's reward table (GNU AGPL v3). Unofficial, not affiliated with InnoGames. <a href="../">Redemption guild</a></p>
+</footer>
+
+<dialog id="settings">
+  <form method="dialog" id="settingsForm">
+    <h2>Your bonuses</h2>
+    <p class="hint" style="margin:0">Your own contribution bonus, as shown in the game. Profit is calculated with these.</p>
+    <div>
+      <label for="arcBonus">Arc bonus (copper GBs), %</label>
+      <input type="number" id="arcBonus" inputmode="decimal" min="0" step="0.1" placeholder="e.g. 90">
+    </div>
+    <div>
+      <label for="goldBonus">Gold-tier bonus, %</label>
+      <input type="number" id="goldBonus" inputmode="decimal" min="0" step="0.1" placeholder="e.g. 20">
+    </div>
+    <div>
+      <label for="myName">Your player name (optional)</label>
+      <input type="text" id="myName" autocomplete="off" placeholder="So your own spot is recognized">
+    </div>
+    <div class="row">
+      <button class="btn btn-primary" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="rewards.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+
+  /* ---------- Great Buildings and their era (index matches Forge Hammer's reward table) ---------- */
+  const ERA_LABELS = {
+    0: 'No Age', 2: 'Bronze Age', 3: 'Iron Age', 4: 'Early Middle Ages', 5: 'High Middle Ages',
+    6: 'Late Middle Ages', 7: 'Colonial Age', 8: 'Industrial Age', 9: 'Progressive Era', 10: 'Modern Era',
+    11: 'Postmodern Era', 12: 'Contemporary Era', 13: 'Tomorrow Era', 14: 'Future Era', 15: 'Arctic Future',
+    16: 'Oceanic Future', 17: 'Virtual Future', 18: 'Space Age Mars', 19: 'Space Age Asteroid Belt',
+    20: 'Space Age Venus', 21: 'Space Age Jupiter Moon', 22: 'Space Age Titan', 23: 'Space Age Space Hub',
+    24: 'Stellar Age: Discovery'
+  };
+  const GBS = [
+    ['Observatory', 0], ['Oracle of Delphi', 0], ['Temple of Relics', 0],
+    ['Tower of Babel', 2], ['Statue of Zeus', 2],
+    ['Colosseum', 3], ['Lighthouse of Alexandria', 3],
+    ['Cathedral of Aachen', 4], ['Hagia Sophia', 4], ['Galata Tower', 4],
+    ["St. Mark's Basilica", 5], ['Notre Dame', 5],
+    ["Saint Basil's Cathedral", 6], ['Castel del Monte', 6],
+    ['Deal Castle', 7], ['Frauenkirche of Dresden', 7],
+    ['Capitol', 8], ['Royal Albert Hall', 8],
+    ['Château Frontenac', 9], ['Alcatraz', 9],
+    ['Space Needle', 10], ['Atomium', 10],
+    ['Cape Canaveral', 11], ['The Habitat', 11],
+    ['Innovation Tower', 12], ['Lotus Temple', 12],
+    ['Voyager V1', 13], ['Truce Tower', 13],
+    ['Rain Forest Project', 14], ['The Arc', 14],
+    ['Gaea Statue', 15], ['Arctic Orangery', 15], ['Seed Vault', 15],
+    ['Atlantis Museum', 16], ['The Kraken', 16], ['The Blue Galaxy', 16],
+    ['Terracotta Army', 17], ['Himeji Castle', 17],
+    ['The Virgo Project', 18], ['Star Gazer', 18],
+    ['Space Carrier', 19], ['Flying Island', 20], ['A.I. Core', 21],
+    ['Saturn VI Gate PEGASUS', 22], ['Saturn VI Gate CENTAURUS', 22], ['Saturn VI Gate HYDRA', 22],
+    ['Stellar Warship', 23], ['Cosmic Catalyst', 23]
+  ];
+
+  const norm = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ').replace(/\b(the)\b/g, ' ').replace(/\s+/g, ' ').trim();
+
+  function matchGB(name) {
+    const n = norm(name);
+    if (!n) return -1;
+    let best = -1, bestScore = 0;
+    GBS.forEach(([gbName], i) => {
+      const g = norm(gbName);
+      let score = 0;
+      if (g === n) score = 1;
+      else if (n.includes(g) || g.includes(n)) score = 0.9;
+      else {
+        const a = new Set(n.split(' ')), b = g.split(' ');
+        score = b.filter(t => a.has(t)).length / Math.max(b.length, a.size);
+      }
+      if (score > bestScore) { bestScore = score; best = i; }
+    });
+    return bestScore >= 0.6 ? best : -1;
+  }
+
+  /* ---------- Math (mirrors Forge Hammer's calculator) ---------- */
+  const fhRound = v => Math.round(v + (v >= 0 ? 1e-6 : -1e-6));
+
+  function baseRewards(era, level) {
+    const table = window.GB_P1_REWARDS && window.GB_P1_REWARDS[era];
+    if (!table || !(level >= 0) || level >= table.length || table[level] === undefined) return null;
+    const r = [table[level]];
+    for (let i = 1; i < 5; i++) r[i] = fhRound(r[i - 1] / (i + 1) / 5) * 5;
+    return r;
+  }
+
+  function compute(s) {
+    const out = { rows: [], remaining: null, best: null, bestOverall: null, unknown: [] };
+    if (!(s.total > 0) || !(s.current >= 0)) return out;
+    const selfFp = s.selfFp > 0 ? s.selfFp : 0;
+    const remaining = s.total - (s.current - selfFp);
+    out.remaining = remaining;
+    const mult = 1 + (s.bonus || 0) / 100;
+    let lastSafe;
+
+    for (let k = 0; k < 5; k++) {
+      const holder = s.places[k];
+      const reward = s.rewards[k];
+      const row = { place: k + 1, gross: reward > 0 ? fhRound(reward * mult) : (reward === 0 ? 0 : null) };
+      out.rows.push(row);
+
+      if (holder === null || holder === undefined || Number.isNaN(holder)) {
+        // Above the screenshot: these players have at least as much in as the top place shown.
+        // If that's already more than the FP left, they're locked too.
+        if (s.aboveFloor && k + 1 <= s.aboveFloor.upTo && s.aboveFloor.atLeast >= remaining) {
+          row.state = 'lockedAbove'; continue;
+        }
+        row.state = 'unknown'; out.unknown.push(k + 1); continue;
+      }
+      row.holder = holder;
+      const safe = fhRound((holder + remaining) / 2);
+
+      if (remaining <= 0) { row.state = 'full'; continue; }
+      if (safe <= holder) { row.state = 'locked'; continue; }
+      if (lastSafe !== undefined && safe === lastSafe) { row.state = 'same'; continue; }
+      lastSafe = safe;
+
+      row.cost = safe;
+      row.toAdd = Math.max(0, safe - selfFp);
+      row.levels = safe === remaining;
+      if (row.gross === null) { row.state = 'noreward'; continue; }
+      row.profit = row.gross - safe;
+      row.state = row.profit > 0 ? 'profit' : 'loss';
+    }
+
+    const cands = out.rows.filter(r => r.state === 'profit')
+      .sort((a, b) => (b.profit - a.profit) || (a.cost - b.cost));
+    out.bestOverall = cands[0] || null;
+    out.best = s.available >= 0 && s.available !== null
+      ? (cands.find(r => r.toAdd <= s.available) || null)
+      : out.bestOverall;
+    return out;
+  }
+
+  /* ---------- Reading screenshots ---------- */
+  let workerPromise = null, progressCb = null;
+  function loadScript(src) {
+    return new Promise((res, rej) => {
+      const el = document.createElement('script');
+      el.src = src; el.onload = res; el.onerror = () => rej(new Error('Could not load the text reader. Check your connection and try again.'));
+      document.head.appendChild(el);
+    });
+  }
+  function getWorker() {
+    if (!workerPromise) {
+      workerPromise = (async () => {
+        if (!window.Tesseract) await loadScript(TESSERACT_URL);
+        return Tesseract.createWorker('eng', 1, { logger: m => progressCb && progressCb(m) });
+      })().catch(e => { workerPromise = null; throw e; });
+    }
+    return workerPromise;
+  }
+
+  async function fileToImage(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      return img;
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+  }
+
+  function prepare(img) {
+    const scale = Math.min(2.5, Math.max(1, 1656 / img.naturalHeight));
+    const w = Math.round(img.naturalWidth * scale), h = Math.round(img.naturalHeight * scale);
+    const color = document.createElement('canvas');
+    color.width = w; color.height = h;
+    const cctx = color.getContext('2d', { willReadFrequently: true });
+    cctx.imageSmoothingEnabled = true; cctx.imageSmoothingQuality = 'high';
+    cctx.drawImage(img, 0, 0, w, h);
+    const gray = document.createElement('canvas');
+    gray.width = w; gray.height = h;
+    const gctx = gray.getContext('2d');
+    const id = cctx.getImageData(0, 0, w, h), d = id.data;
+    const out = gctx.createImageData(w, h), o = out.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const l = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      o[i] = o[i + 1] = o[i + 2] = l; o[i + 3] = 255;
+    }
+    gctx.putImageData(out, 0, 0);
+    return { color, gray, w, h, cctx };
+  }
+
+  function crop(canvas, x, y, w, h) {
+    x = Math.max(0, Math.round(x)); y = Math.max(0, Math.round(y));
+    w = Math.min(canvas.width - x, Math.round(w)); h = Math.min(canvas.height - y, Math.round(h));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, w); c.height = Math.max(1, h);
+    c.getContext('2d').drawImage(canvas, x, y, w, h, 0, 0, w, h);
+    return c;
+  }
+
+  async function ocrWords(canvas) {
+    const worker = await getWorker();
+    await worker.setParameters({ tessedit_pageseg_mode: '11', tessedit_char_whitelist: '' });
+    const { data } = await worker.recognize(canvas);
+    return (data.words || []).map(w => ({
+      text: (w.text || '').trim(), conf: w.confidence,
+      x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1
+    })).filter(w => w.text);
+  }
+
+  // Place number: light digits on a dark row. Keep only bright pixels, enlarge, read as one line of digits.
+  async function readPlaceNumber(gray, x, y, w, h) {
+    const src = crop(gray, x, y, w, h);
+    const sctx = src.getContext('2d');
+    const id = sctx.getImageData(0, 0, src.width, src.height);
+    const k = 4, pad = 40;
+    const out = document.createElement('canvas');
+    out.width = src.width * k + pad * 2; out.height = src.height * k + pad * 2;
+    const octx = out.getContext('2d');
+    octx.fillStyle = '#fff'; octx.fillRect(0, 0, out.width, out.height);
+    const worker = await getWorker();
+    for (const th of [150, 120]) {
+      let dark = 0;
+      octx.fillStyle = '#fff'; octx.fillRect(0, 0, out.width, out.height);
+      octx.fillStyle = '#000';
+      for (let yy = 0; yy < src.height; yy++) {
+        for (let xx = 0; xx < src.width; xx++) {
+          if (id.data[(yy * src.width + xx) * 4] > th) { octx.fillRect(pad + xx * k, pad + yy * k, k, k); dark++; }
+        }
+      }
+      if (!dark) return null; // nothing bright here: no place number (the owner's row)
+      await worker.setParameters({ tessedit_pageseg_mode: '7', tessedit_char_whitelist: '0123456789' });
+      const { data } = await worker.recognize(out);
+      const n = parseInt((data.text || '').replace(/\D/g, ''), 10);
+      if (n >= 1 && n <= 99) return n;
+    }
+    return null;
+  }
+
+  const cy = w => (w.y0 + w.y1) / 2;
+  const wh = w => w.y1 - w.y0;
+  const sameLine = (a, b) => Math.abs(cy(a) - cy(b)) < Math.max(wh(a), wh(b)) * 0.7;
+  const isNum = t => /^\d{1,3}([,.]\d{3})+$|^\d+$/.test(t);
+  const toNum = t => parseInt(String(t).replace(/[^\d]/g, ''), 10);
+
+  function lumStd(ctx, x, y, w, h) {
+    x = Math.max(0, Math.round(x)); y = Math.max(0, Math.round(y));
+    w = Math.max(1, Math.min(ctx.canvas.width - x, Math.round(w)));
+    h = Math.max(1, Math.min(ctx.canvas.height - y, Math.round(h)));
+    const d = ctx.getImageData(x, y, w, h).data;
+    let sum = 0, sq = 0, n = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      const l = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      sum += l; sq += l * l; n++;
+    }
+    const mean = sum / n;
+    return Math.sqrt(Math.max(0, sq / n - mean * mean));
+  }
+
+  async function readScreenshot(img) {
+    const p = prepare(img);
+    const words = await ocrWords(p.gray);
+    const res = { rows: [], cutOff: false };
+
+    // Title: "<GB name> - Copper|Gold"
+    const tierW = words.find(w => /^(copper|gold)$/i.test(w.text.replace(/[^a-z]/gi, '')) && w.y1 < p.h * 0.22);
+    if (tierW) {
+      res.tier = /gold/i.test(tierW.text) ? 'gold' : 'copper';
+      const line = words.filter(w => sameLine(w, tierW) && w.x1 <= tierW.x0 && w.conf > 55)
+        .sort((a, b) => b.x0 - a.x0);
+      const parts = [];
+      let edge = tierW.x0;
+      for (const w of line) {
+        if (edge - w.x1 > wh(tierW) * 2.5) break;
+        edge = w.x0;
+        if (/[a-z0-9]/i.test(w.text)) parts.unshift(w.text);
+      }
+      res.gbName = parts.join(' ');
+    }
+
+    // Progress: "127977/134871"
+    let fracW = null;
+    for (const w of words) {
+      const m = w.text.replace(/\s/g, '').match(/^(\d[\d,.]*)\/(\d[\d,.]*)$/);
+      if (m) { fracW = w; res.current = toNum(m[1]); res.total = toNum(m[2]); break; }
+    }
+
+    // Available Forge Points: first plain number to the right on the same line
+    const availW = words.find(w => /^available$/i.test(w.text));
+    if (availW) {
+      const n = words.filter(w => sameLine(w, availW) && w.x0 > availW.x1 && isNum(w.text))
+        .sort((a, b) => a.x0 - b.x0)[0];
+      if (n) res.available = toNum(n.text);
+    }
+
+    // Level labels sit just under the progress bar: "Level 101" on the left, "Level 102" on the right.
+    // Read that strip on its own; if only the right label reads, the current level is one less.
+    if (fracW) {
+      const findLevels = bw => {
+        const found = [];
+        bw.forEach(w => {
+          const t = w.text.replace(/^[^a-z]+/i, '');
+          const m = t.match(/^[lt]evel(.*)$/i);
+          if (!m) return;
+          let numText = m[1];
+          if (!numText) {
+            const n = bw.filter(x => sameLine(x, w) && x.x0 > w.x1).sort((a, b) => a.x0 - b.x0)[0];
+            numText = n ? n.text : '';
+          }
+          const d = numText.replace(/[iIl|!]/g, '1').replace(/[oO]/g, '0').replace(/\D/g, '');
+          if (d.length >= 1 && d.length <= 3) found.push({ n: +d, left: (w.x0 + w.x1) / 2 < band.width / 2 });
+        });
+        return found;
+      };
+      let band = crop(p.gray, 0, fracW.y1, p.w, wh(fracW) * 3.4);
+      let found = findLevels(await ocrWords(band));
+      if (!found.length) {
+        const big = document.createElement('canvas');
+        big.width = Math.round(band.width * 1.5); big.height = Math.round(band.height * 1.5);
+        const bctx = big.getContext('2d'); bctx.imageSmoothingQuality = 'high';
+        bctx.drawImage(band, 0, 0, big.width, big.height);
+        band = big;
+        found = findLevels(await ocrWords(big));
+      }
+      const L = found.find(f => f.left), R = found.find(f => !f.left);
+      if (L && R && R.n === L.n + 1) res.level = L.n;
+      else if (R) res.level = R.n - 1;
+      else if (L) res.level = L.n;
+    }
+
+    // Contribution rows: "<number> Forge Points"
+    const rows = [];
+    words.forEach(w => {
+      if (!isNum(w.text)) return;
+      const forge = words.find(x => /^forg/i.test(x.text) && sameLine(x, w) && x.x0 > w.x1 && x.x0 - w.x1 < wh(w) * 2.5);
+      if (!forge) return;
+      if (availW && sameLine(w, availW)) return;
+      const pts = words.find(x => /^points?/i.test(x.text) && sameLine(x, forge) && x.x0 > forge.x1 && x.x0 - forge.x1 < wh(forge) * 2);
+      rows.push({ num: w, forge, pts, fp: toNum(w.text) });
+    });
+    rows.sort((a, b) => cy(a.num) - cy(b.num));
+
+    let r;
+    if (rows.length >= 2) {
+      const gaps = [];
+      for (let i = 1; i < rows.length; i++) gaps.push(cy(rows[i].num) - cy(rows[i - 1].num));
+      gaps.sort((a, b) => a - b);
+      r = gaps[Math.floor(gaps.length / 2)];
+    } else if (rows.length === 1) {
+      r = wh(rows[0].forge) * 4.7;
+    }
+
+    // Names start at the same x in every row; use the most common left edge
+    const nameLeft = [];
+    for (const row of rows) {
+      const rc = cy(row.num);
+      const nameWords = words.filter(w => w.conf > 55 && /[a-z0-9]/i.test(w.text) &&
+        Math.abs(cy(w) - rc) < r * 0.45 && w.x1 <= row.num.x0 - r * 0.1 && w.x0 >= row.num.x0 - r * 2.6)
+        .sort((a, b) => (Math.abs(cy(a) - cy(b)) < wh(a) * 0.6 ? a.x0 - b.x0 : cy(a) - cy(b)));
+      while (nameWords.length > 1 && nameWords[0].text.length < 2) nameWords.shift(); // stray marks from the avatar
+      row.name = nameWords.map(w => w.text).join(' ');
+      if (nameWords.length) nameLeft.push(Math.min(...nameWords.map(w => w.x0)));
+    }
+    nameLeft.sort((a, b) => a - b);
+    const nx = nameLeft.length ? nameLeft[Math.floor(nameLeft.length / 2)] : null;
+
+    for (const row of rows) {
+      const rc = cy(row.num);
+      // Rows that pay a reward (places 1-5) have a chest next to the FP; the owner's row doesn't
+      const px1 = row.pts ? row.pts.x1 : row.num.x1 + r * 1.4;
+      const std = lumStd(p.cctx, px1 + r * 0.25, rc - r * 0.3, r * 0.7, r * 0.6);
+      const chest = std >= 20;
+      const left = nx !== null ? nx : row.num.x0 - r * 2.2;
+      const place = await readPlaceNumber(p.gray, left - r * 2.0, rc - r * 0.33, r * 1.0, r * 0.66);
+      res.rows.push({ fp: row.fp, name: row.name, chest, place });
+    }
+
+    if (rows.length) {
+      const last = rows[rows.length - 1];
+      res.cutOff = cy(last.num) + r * 1.5 > p.h;
+    }
+    return res;
+  }
+
+  /* ---------- State ---------- */
+  const store = {
+    get(k) { try { return localStorage.getItem('snipecheck.' + k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem('snipecheck.' + k, v); } catch (e) { /* storage unavailable */ } }
+  };
+
+  const state = {
+    gbIndex: -1, era: null, gbName: '', tier: 'copper', level: null,
+    current: null, total: null, available: null, selfFp: null,
+    places: [null, null, null, null, null], names: ['', '', '', '', ''],
+    owner: null, aboveFloor: null, placesGuessed: false,
+    rewards: [null, null, null, null, null], rewardsEdited: false
+  };
+
+  const settings = {
+    arc: parseFloat(store.get('arc')),
+    gold: parseFloat(store.get('gold')),
+    name: store.get('name') || ''
+  };
+
+  const $ = id => document.getElementById(id);
+  const fmt = n => (n === null || n === undefined || Number.isNaN(n)) ? '' : Number(n).toLocaleString('en-US');
+
+  function bonus() {
+    const v = state.tier === 'gold' ? settings.gold : settings.arc;
+    return Number.isFinite(v) ? v : null;
+  }
+
+  function refreshRewards() {
+    if (state.rewardsEdited) return;
+    const r = (state.era !== null && state.level !== null) ? baseRewards(state.era, state.level) : null;
+    state.rewards = r ? r.slice() : [null, null, null, null, null];
+  }
+
+  function applyRead(rd) {
+    state.gbName = rd.gbName || '';
+    state.tier = rd.tier || state.tier;
+    state.level = rd.level ?? null;
+    state.current = rd.current ?? null;
+    state.total = rd.total ?? null;
+    state.available = rd.available ?? null;
+    state.gbIndex = matchGB(state.gbName);
+    state.era = state.gbIndex >= 0 ? GBS[state.gbIndex][1] : null;
+
+    // Which place is each row? Rows with a chest are places 1-5. Use the place number read
+    // from the row, and fill gaps from the rows around it (places go up by one down the list).
+    const rows = rd.rows.map(x => ({ ...x }));
+    rows.forEach(x => { if (!x.chest || !(x.place >= 1 && x.place <= 5)) x.place = x.chest ? null : x.place; });
+    const paid = rows.filter(x => x.chest);
+    for (let pass = 0; pass < 5; pass++) {
+      paid.forEach((x, i) => {
+        if (x.place) return;
+        if (paid[i - 1] && paid[i - 1].place) x.place = paid[i - 1].place + 1;
+        else if (paid[i + 1] && paid[i + 1].place) x.place = paid[i + 1].place - 1;
+      });
+    }
+    state.placesGuessed = paid.length > 0 && paid.every(x => !x.place);
+    if (state.placesGuessed) paid.forEach((x, i) => { x.place = i + 1; });
+
+    // Owner: a row without a chest above the paid places
+    const firstPaid = rows.indexOf(paid[0]);
+    const ownerRow = rows.find((x, i) => !x.chest && (firstPaid < 0 || i < firstPaid));
+    state.owner = ownerRow ? { name: ownerRow.name, fp: ownerRow.fp } : null;
+
+    const byPlace = {};
+    paid.forEach(x => { if (x.place >= 1 && x.place <= 5 && !byPlace[x.place]) byPlace[x.place] = x; });
+    const known = Object.keys(byPlace).map(Number).sort((a, b) => a - b);
+    const minPlace = known.length ? known[0] : null;
+    const maxPlace = known.length ? known[known.length - 1] : null;
+    const listEndsInView = !rd.cutOff || rows.some((x, i) => i > rows.indexOf(byPlace[maxPlace]) && !x.chest);
+
+    const me = settings.name ? norm(settings.name) : '';
+    state.selfFp = null;
+    state.aboveFloor = minPlace > 1 ? { upTo: minPlace - 1, atLeast: byPlace[minPlace].fp } : null;
+    for (let k = 1; k <= 5; k++) {
+      const x = byPlace[k];
+      if (x) {
+        state.places[k - 1] = x.fp; state.names[k - 1] = x.name || '';
+        if (me && norm(x.name) === me) state.selfFp = x.fp;
+      } else if (maxPlace !== null && k > maxPlace && listEndsInView) {
+        state.places[k - 1] = 0; state.names[k - 1] = '';
+      } else if (maxPlace === null && !rd.cutOff && rd.total) {
+        state.places[k - 1] = 0; state.names[k - 1] = '';
+      } else {
+        state.places[k - 1] = null; state.names[k - 1] = '';
+      }
+    }
+    state.rewardsEdited = false;
+    refreshRewards();
+  }
+
+  /* ---------- Rendering ---------- */
+  const STATE_TEXT = {
+    locked: 'Locked', lockedAbove: 'Locked', same: 'Same cost as above', unknown: 'Needs holder FP', full: 'GB is full',
+    loss: 'Costs more than it pays', noreward: 'Needs reward', profit: 'Profit'
+  };
+
+  function show(view) {
+    ['startView', 'readingView', 'resultView'].forEach(v => { $(v).hidden = v !== view; });
+  }
+
+  function render() {
+    const s = {
+      total: state.total, current: state.current, available: state.available,
+      selfFp: state.selfFp, places: state.places, rewards: state.rewards, bonus: bonus(),
+      aboveFloor: state.aboveFloor
+    };
+    const res = compute(s);
+
+    // header line
+    const gbName = state.gbIndex >= 0 ? GBS[state.gbIndex][0] : (state.gbName || 'Great Building');
+    $('gbLine').textContent = gbName +
+      (state.level !== null ? ', level ' + state.level + ' to ' + (state.level + 1) : '') +
+      (res.remaining !== null ? '. ' + fmt(res.remaining) + ' FP left' : '');
+
+    // details form values (don't overwrite the field being typed in)
+    const setVal = (id, v) => { const el = $(id); if (document.activeElement !== el) el.value = (v === null || v === undefined) ? '' : v; };
+    $('gbSelect').value = state.gbIndex >= 0 ? 'gb' + state.gbIndex : (state.era !== null ? 'era' + state.era : '');
+    setVal('level', state.level); setVal('current', state.current); setVal('total', state.total);
+    setVal('available', state.available); setVal('selfFp', state.selfFp);
+    document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tier === state.tier)));
+    $('level').classList.toggle('missing', state.level === null);
+    $('current').classList.toggle('missing', state.current === null);
+    $('total').classList.toggle('missing', state.total === null);
+    $('gbSelect').classList.toggle('missing', state.era === null);
+
+    // places table
+    const tb = $('placeRows');
+    if (!tb.children.length) {
+      for (let k = 0; k < 5; k++) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="place">${k + 1}</td>
+          <td class="holder"><input type="number" inputmode="numeric" min="0" aria-label="Place ${k + 1} holder FP" data-k="${k}"><span class="who"></span></td>
+          <td class="pays"></td><td class="cost"></td><td class="profit"></td>`;
+        tb.appendChild(tr);
+      }
+      tb.addEventListener('input', e => {
+        const k = +e.target.dataset.k;
+        if (Number.isNaN(k)) return;
+        const v = e.target.value.trim();
+        state.places[k] = v === '' ? null : Math.max(0, parseInt(v, 10) || 0);
+        state.names[k] = '';
+        render();
+      });
+    }
+    res.rows.forEach((row, k) => {
+      const tr = tb.children[k];
+      const inp = tr.querySelector('input');
+      if (document.activeElement !== inp) inp.value = state.places[k] === null ? '' : state.places[k];
+      inp.classList.toggle('missing', row.state === 'unknown');
+      inp.placeholder = row.state === 'lockedAbove' ? 'More' : '?';
+      const who = tr.querySelector('.who');
+      who.textContent = state.names[k] || (state.places[k] === 0 ? 'Empty'
+        : (state.places[k] === null && state.aboveFloor && k + 1 <= state.aboveFloor.upTo ? 'Above screenshot' : ''));
+      tr.querySelector('.pays').textContent = row.gross === null ? '?' : fmt(row.gross);
+      tr.querySelector('.cost').textContent = row.cost !== undefined ? fmt(row.toAdd) : '';
+      const pc = tr.querySelector('.profit');
+      if (row.state === 'profit' || row.state === 'loss') {
+        pc.innerHTML = `<span class="${row.profit > 0 ? 'pos' : 'neg'}">${row.profit > 0 ? '+' : ''}${fmt(row.profit)}</span>`;
+      } else {
+        pc.innerHTML = `<span class="st">${STATE_TEXT[row.state] || ''}</span>`;
+      }
+      tr.classList.toggle('best', !!res.best && res.best.place === row.place);
+    });
+
+    // owner line
+    if (state.owner) {
+      $('ownerLine').hidden = false;
+      $('ownerLine').textContent = `Owner ${state.owner.name || ''} has ${fmt(state.owner.fp)} FP in. Owners don't take a place.`;
+    } else {
+      $('ownerLine').hidden = true;
+    }
+
+    // rewards inputs
+    const ri = $('rewardInputs');
+    if (!ri.children.length) {
+      for (let k = 0; k < 5; k++) {
+        const d = document.createElement('div');
+        d.innerHTML = `<label for="rw${k}">${k + 1}</label><input type="number" inputmode="numeric" min="0" id="rw${k}" data-r="${k}">`;
+        ri.appendChild(d);
+      }
+      ri.addEventListener('input', e => {
+        const k = +e.target.dataset.r; if (Number.isNaN(k)) return;
+        const v = e.target.value.trim();
+        state.rewards[k] = v === '' ? null : Math.max(0, parseInt(v, 10) || 0);
+        state.rewardsEdited = true; render();
+      });
+    }
+    state.rewards.forEach((v, k) => { const el = $('rw' + k); if (document.activeElement !== el) el.value = v === null ? '' : v; });
+    $('rewardsHint').textContent = state.rewards[0] === null
+      ? 'No reward table entry for this building and level. Tap the chest next to each place in the game and type the FP here.'
+      : "FP each place pays before your bonus. Filled in from Forge Hammer's reward table. To check, tap the chest next to a place in the game.";
+    if (state.rewards[0] === null && state.era !== null && state.level !== null) $('rewardsBox').open = true;
+
+    renderAnswer(res);
+  }
+
+  function renderAnswer(res) {
+    show('resultView');
+    const title = $('resultTitle'), figs = $('resultFigures'), note = $('resultNote');
+    figs.innerHTML = ''; note.className = 'note'; note.textContent = '';
+
+    if (state.total === null || state.current === null) {
+      title.textContent = 'Need the FP progress';
+      note.textContent = 'Type the FP put in so far and the FP to level below, from the bar at the top of the Level Up tab.';
+      return;
+    }
+    if (res.remaining <= 0) { title.textContent = 'This level is full'; return; }
+    if (bonus() === null) {
+      title.textContent = 'Set your bonuses';
+      note.textContent = `Tap Your bonuses at the top and enter your ${state.tier === 'gold' ? 'gold-tier' : 'Arc'} bonus so profit is right.`;
+      note.classList.add('warn');
+      return;
+    }
+
+    const pick = res.best || res.bestOverall;
+    if (pick) {
+      title.textContent = `Take place ${pick.place}`;
+      const copy = document.createElement('button');
+      copy.type = 'button'; copy.className = 'fig copy';
+      copy.innerHTML = `<div class="n">${fmt(pick.toAdd)} FP</div><div class="l">to put in</div>`;
+      copy.onclick = () => copyText(String(pick.toAdd));
+      const prof = document.createElement('div');
+      prof.className = 'fig';
+      prof.innerHTML = `<div class="n profit">+${fmt(pick.profit)} FP</div><div class="l">profit with your ${fmt(bonus())}% bonus</div>`;
+      figs.append(copy, prof);
+
+      const lines = [];
+      if (pick.levels) lines.push('This finishes the level.');
+      if (!res.best && state.available !== null) {
+        lines.push(`You have ${fmt(state.available)} FP, ${fmt(pick.toAdd - state.available)} short.`);
+        note.classList.add('warn');
+      } else if (res.best && res.bestOverall && res.best !== res.bestOverall) {
+        lines.push(`Place ${res.bestOverall.place} pays +${fmt(res.bestOverall.profit)} but needs ${fmt(res.bestOverall.toAdd)} FP.`);
+      }
+      if (res.unknown.length) lines.push(`${placesText(res.unknown)} ${res.unknown.length > 1 ? "weren't" : "wasn't"} in the screenshot, so ${res.unknown.length > 1 ? "they weren't" : "it wasn't"} checked. Type the holder FP below to include ${res.unknown.length > 1 ? 'them' : 'it'}.`);
+      if (state.placesGuessed) lines.push("Couldn't read the place numbers, so the top row was taken as place 1. Check the places below.");
+      note.textContent = lines.join(' ');
+      return;
+    }
+
+    if (res.unknown.length) {
+      title.textContent = `Need place ${res.unknown[0]}`;
+      note.textContent = `${placesText(res.unknown)} ${res.unknown.length > 1 ? "weren't" : "wasn't"} in the screenshot. Scroll the list down to place 5 and take the screenshot again, or type the holder FP below.`;
+      note.classList.add('warn');
+      return;
+    }
+    title.textContent = 'Nothing to snipe';
+    const locked = res.rows.filter(r => /^locked/.test(r.state)).map(r => r.place);
+    note.textContent = (locked.length ? `${placesText(locked)} ${locked.length > 1 ? 'are' : 'is'} locked. ` : '') +
+      'The open places cost more than they pay right now.';
+  }
+
+  function placesText(list) {
+    if (list.length === 1) return `Place ${list[0]}`;
+    const contiguous = list.every((v, i) => i === 0 || v === list[i - 1] + 1);
+    return contiguous ? `Places ${list[0]}–${list[list.length - 1]}` : `Places ${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+  }
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); toast('Copied ' + text); }
+    catch (e) { toast('Copy failed. The amount is ' + text); }
+  }
+
+  /* ---------- Events ---------- */
+  function buildSelect() {
+    const sel = $('gbSelect');
+    sel.innerHTML = '<option value="">Choose a building</option>';
+    const groups = {};
+    GBS.forEach(([name, era], i) => { (groups[era] = groups[era] || []).push([name, i]); });
+    Object.keys(ERA_LABELS).map(Number).forEach(era => {
+      const og = document.createElement('optgroup'); og.label = ERA_LABELS[era];
+      (groups[era] || []).forEach(([name, i]) => og.append(new Option(name, 'gb' + i)));
+      og.append(new Option(`Other ${ERA_LABELS[era]} building`, 'era' + era));
+      sel.append(og);
+    });
+  }
+
+  function bindNum(id, key) {
+    $(id).addEventListener('input', e => {
+      const v = e.target.value.trim();
+      state[key] = v === '' ? null : Math.max(0, parseInt(v, 10) || 0);
+      if (key === 'level') { state.rewardsEdited = false; refreshRewards(); }
+      render();
+    });
+  }
+
+  function init() {
+    buildSelect();
+    $('gbSelect').addEventListener('change', e => {
+      const v = e.target.value;
+      if (v.startsWith('gb')) { state.gbIndex = +v.slice(2); state.era = GBS[state.gbIndex][1]; }
+      else if (v.startsWith('era')) { state.gbIndex = -1; state.era = +v.slice(3); }
+      else { state.gbIndex = -1; state.era = null; }
+      state.rewardsEdited = false; refreshRewards(); render();
+    });
+    ['level', 'current', 'total', 'available', 'selfFp'].forEach(id => bindNum(id, id));
+    document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => { state.tier = b.dataset.tier; render(); }));
+
+    $('manualBtn').addEventListener('click', () => {
+      $('details').hidden = false; render();
+      $('gbSelect').focus();
+    });
+
+    $('files').addEventListener('change', async e => {
+      const file = e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      $('pickLabel').setAttribute('aria-disabled', 'true');
+      show('readingView');
+      const bar = $('bar');
+      let step = 0;
+      try {
+        $('readingTitle').textContent = 'Reading screenshot';
+        progressCb = m => {
+          if (m.status === 'recognizing text') {
+            if (m.progress >= 1) step++;
+            bar.style.width = Math.min(95, Math.round((step + m.progress) * 12)) + '%';
+          } else if (/loading|initializ/.test(m.status || '')) {
+            $('readingNote').textContent = 'Loading the text reader. The first time takes a little longer.';
+          }
+        };
+        const img = await fileToImage(file);
+        const read = await readScreenshot(img);
+        bar.style.width = '100%';
+        applyRead(read);
+        $('details').hidden = false;
+        render();
+        if (!(read.total || read.rows.length)) {
+          $('resultTitle').textContent = "Couldn't read that";
+          $('resultNote').textContent = "Make sure it's a screenshot of a Great Building's Level Up tab, or type the numbers below.";
+        }
+      } catch (err) {
+        show('resultView');
+        $('resultTitle').textContent = "Couldn't read the screenshot";
+        $('resultFigures').innerHTML = '';
+        $('resultNote').textContent = err && err.message ? err.message : 'Try again, or type the numbers below.';
+        $('details').hidden = false;
+      } finally {
+        progressCb = null;
+        $('pickLabel').removeAttribute('aria-disabled');
+        bar.style.width = '0';
+      }
+    });
+
+    // Settings
+    const dlg = $('settings');
+    const openSettings = () => {
+      $('arcBonus').value = Number.isFinite(settings.arc) ? settings.arc : '';
+      $('goldBonus').value = Number.isFinite(settings.gold) ? settings.gold : '';
+      $('myName').value = settings.name;
+      dlg.showModal();
+    };
+    $('openSettings').addEventListener('click', openSettings);
+    $('settingsForm').addEventListener('submit', () => {
+      settings.arc = parseFloat($('arcBonus').value);
+      settings.gold = parseFloat($('goldBonus').value);
+      settings.name = $('myName').value.trim();
+      store.set('arc', Number.isFinite(settings.arc) ? settings.arc : '');
+      store.set('gold', Number.isFinite(settings.gold) ? settings.gold : '');
+      store.set('name', settings.name);
+      if (!$('details').hidden) render();
+    });
+    if (!Number.isFinite(settings.arc)) setTimeout(openSettings, 300);
+
+    // Start loading the text reader early so the first read is quicker
+    if ('requestIdleCallback' in window) requestIdleCallback(() => getWorker().catch(() => {}));
+  }
+
+  window.SnipeCheck = { compute, baseRewards, matchGB, state };
+  init();
+})();
+</script>
+</body>
+</html>
